@@ -1,0 +1,18 @@
+{
+  "name": "Calendario de Turnos 2×2",
+  "short_name": "Mis Turnos",
+  "description": "Calendario de turnos 2x2 con resumen financiero por quincenas",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#060b18",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://api.iconify.design/twemoji:calendar.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#4f46e5">
+  <link rel="manifest" href="./manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Mis Turnos">
@@ -298,6 +299,20 @@
     }
     .scope-btn.scope-active { background: rgba(99,102,241,0.2); border-color: rgba(99,102,241,0.5); color: #a5b4fc; }
 
+    /* ── DISCOUNTS ── */
+    .disc-item {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 10px 13px;
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 6px;
+    }
+    .disc-item.quincenal { border-left: 3px solid #a855f7; }
+    .disc-item.mensual   { border-left: 3px solid #6366f1; }
+    .disc-pct-badge {
+      font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500;
+      color: #c084fc; margin-right: 8px;
+    }
+
     /* ── INCAPACITY ── */
     .btn-incap { background: linear-gradient(135deg,#164e63,#0891b2); color: white; }
     .modal-incap-notice { background: rgba(8,145,178,0.1); border: 1px solid rgba(8,145,178,0.3); border-radius: 10px; padding: 9px 12px; margin-bottom: 14px; font-size: 12px; color: #7dd3fc; text-align: center; }
@@ -416,6 +431,9 @@
   <button class="tab" onclick="switchTab('gastos')" id="tab-gastos">
     <span class="tab-icon">💸</span>GASTOS
   </button>
+  <button class="tab" onclick="switchTab('descuentos')" id="tab-descuentos">
+    <span class="tab-icon">✂️</span>DESCUENTOS
+  </button>
 </div>
 
 <!-- SECTION: RESUMEN -->
@@ -472,6 +490,63 @@
 
 <!-- PRINT REPORT (hidden, shown only on print) -->
 <div id="print-report"></div>
+
+<!-- SECTION: DESCUENTOS -->
+<div class="section" id="section-descuentos">
+  <div class="expense-form">
+    <div class="form-title">✂️ Agregar Descuento</div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label class="form-label">Nombre</label>
+        <input class="form-input" id="disc-name" type="text" placeholder="ej. Fondo empleados, Salud..." />
+      </div>
+      <div class="form-group" style="flex:1">
+        <label class="form-label">Frecuencia</label>
+        <select class="form-select" id="disc-freq">
+          <option value="quincenal">Quincenal</option>
+          <option value="mensual">Mensual</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:1">
+        <label class="form-label">Tipo</label>
+        <select class="form-select" id="disc-type" onchange="toggleDiscType()">
+          <option value="pct">Porcentaje (%)</option>
+          <option value="fixed">Valor fijo ($)</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:1" id="disc-pct-group">
+        <label class="form-label">Porcentaje</label>
+        <input class="form-input" id="disc-pct" type="number" placeholder="ej. 6" min="0" max="100" step="0.01" inputmode="decimal" />
+      </div>
+      <div class="form-group" style="flex:1;display:none" id="disc-fixed-group">
+        <label class="form-label">Valor ($)</label>
+        <input class="form-input" id="disc-fixed" type="number" placeholder="0" inputmode="numeric" />
+      </div>
+    </div>
+    <button class="btn-add" onclick="addDiscount()" style="width:100%;background:linear-gradient(135deg,#7c3aed,#a855f7)">Agregar Descuento</button>
+  </div>
+
+  <!-- Notifications toggle -->
+  <div class="s-card-full" style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div class="card-label" style="color:#a5b4fc">🔔 Notificaciones</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Aviso del turno del día siguiente</div>
+      </div>
+      <div id="notif-toggle-wrap">
+        <button id="notif-toggle-btn" onclick="toggleNotifications()" style="
+          border-radius:20px;padding:7px 16px;font-size:12px;font-weight:700;
+          cursor:pointer;font-family:'Outfit',sans-serif;border:none;transition:all 0.2s;
+        ">Activar</button>
+      </div>
+    </div>
+    <div id="notif-status" style="font-size:11px;margin-top:8px;color:var(--text-muted)"></div>
+  </div>
+
+  <div id="discount-list-content"></div>
+</div>
 
 <!-- MODAL: TURNO -->
 <div class="modal-overlay" id="modal" onclick="closeBg(event)">
@@ -536,15 +611,16 @@ let Y = today.getFullYear(), M = today.getMonth(), selKey = null;
 
 // Storage keys
 const OV_KEY  = 'turnos_ov2';
-const EXP_KEY = 'turnos_exp';          // global/recurring expenses (legacy + new recurring)
-const EXP_MONTH_KEY = 'turnos_exp_m';  // per-month expenses  { "2026-05": [...], ... }
-const INCAP_RATE = 26670; // valor por día de incapacidad (configurable aquí)
+const EXP_KEY = 'turnos_exp';
+const EXP_MONTH_KEY = 'turnos_exp_m';
+const DISC_KEY = 'turnos_disc';         // discounts array
+const INCAP_RATE = 26670;
 
-let overrides = JSON.parse(localStorage.getItem(OV_KEY)  || '{}');
-let expenses  = JSON.parse(localStorage.getItem(EXP_KEY) || '[]');
-// monthExpenses: object keyed by "YYYY-MM" → array of expense objects
+let overrides     = JSON.parse(localStorage.getItem(OV_KEY)  || '{}');
+let expenses      = JSON.parse(localStorage.getItem(EXP_KEY) || '[]');
 let monthExpenses = JSON.parse(localStorage.getItem(EXP_MONTH_KEY) || '{}');
-// overrides[key] = true (absent) | number (partial hours) | 'INCAP' (incapacity)
+let discounts     = JSON.parse(localStorage.getItem(DISC_KEY) || '[]');
+// discount: { id, name, freq:'quincenal'|'mensual', type:'pct'|'fixed', pct, fixed }
 
 // Scope toggle state for new expense form
 let expenseScope = 'month'; // 'month' | 'all'
@@ -554,6 +630,39 @@ function setScopeAll(){   expenseScope='all';   document.getElementById('scope-b
 function monthKey(y,m){ return `${y}-${String(m+1).padStart(2,'0')}`; }
 function saveExp(){ localStorage.setItem(EXP_KEY, JSON.stringify(expenses)); }
 function saveMonthExp(){ localStorage.setItem(EXP_MONTH_KEY, JSON.stringify(monthExpenses)); }
+function saveDisc(){ localStorage.setItem(DISC_KEY, JSON.stringify(discounts)); }
+
+// Returns total discounts for a quincena given the quincena earnings
+function getDiscountTotal(qEarn, totalEarn, quincenal /* bool */){
+  let total = 0;
+  discounts.forEach(d => {
+    if(d.freq==='quincenal'){
+      // applies to each quincena separately
+      const base = quincenal ? qEarn : 0; // pass qEarn per quincena call
+      total += d.type==='pct' ? (d.pct/100)*qEarn : d.fixed;
+    } else {
+      // mensual: only add once — caller handles splitting
+    }
+  });
+  return total;
+}
+
+// Returns full monthly discount totals broken down
+function getMonthDiscounts(y, m){
+  const c = calcMonthEarnings(y,m); // raw earnings without discounts
+  let q1disc=0, q2disc=0, monthDisc=0;
+  discounts.forEach(d => {
+    if(d.freq==='quincenal'){
+      const v1 = d.type==='pct' ? (d.pct/100)*c.q1earn : d.fixed;
+      const v2 = d.type==='pct' ? (d.pct/100)*c.q2earn : d.fixed;
+      q1disc += v1; q2disc += v2;
+    } else {
+      const v = d.type==='pct' ? (d.pct/100)*c.totalEarn : d.fixed;
+      monthDisc += v;
+    }
+  });
+  return { q1disc, q2disc, total: q1disc+q2disc+monthDisc, monthDisc };
+}
 
 // ═══════════════════════════════════════════════════════
 // HELPERS
@@ -643,19 +752,22 @@ function hasDayExpense(y,m,d){
 // TAB NAVIGATION
 // ═══════════════════════════════════════════════════════
 function switchTab(tab){
-  ['resumen','calendar','gastos'].forEach(t=>{
-    document.getElementById('section-'+( t==='calendar'?'calendar': t==='gastos'?'expenses':t)).classList.toggle('active', t===tab);
-    document.getElementById('tab-'+(t==='gastos'?'gastos':t==='calendar'?'calendar':'resumen')).classList.toggle('active', t===tab);
+  ['resumen','calendar','gastos','descuentos'].forEach(t=>{
+    const secId = t==='calendar'?'calendar': t==='gastos'?'expenses': t==='descuentos'?'descuentos': t;
+    const tabId = t==='gastos'?'gastos': t==='calendar'?'calendar': t==='descuentos'?'descuentos': 'resumen';
+    document.getElementById('section-'+secId).classList.toggle('active', t===tab);
+    document.getElementById('tab-'+tabId).classList.toggle('active', t===tab);
   });
   if(tab==='calendar') renderCal();
   if(tab==='gastos') renderExpenses();
   if(tab==='resumen') renderResumen();
+  if(tab==='descuentos'){ renderDiscounts(); renderNotifStatus(); }
 }
 
 // ═══════════════════════════════════════════════════════
 // RENDER: RESUMEN
 // ═══════════════════════════════════════════════════════
-function calcMonth(y,m){
+function calcMonthEarnings(y,m){
   const total=dim(y,m);
   let q1h=0,q2h=0,q1earn=0,q2earn=0;
   let q1a=0,q2a=0,q1p=0,q2p=0,q1i=0,q2i=0;
@@ -671,9 +783,15 @@ function calcMonth(y,m){
     if(eff==='PARCIAL'){ partialCount++; d<=15?q1p++:q2p++; }
     if(eff==='INCAP'){   incapCount++;   d<=15?q1i++:q2i++; }
   }
+  return { q1h,q2h,q1earn,q2earn,totalHours,totalEarn,absentCount,partialCount,incapCount,q1a,q2a,q1p,q2p,q1i,q2i };
+}
+
+function calcMonth(y,m){
+  const earn = calcMonthEarnings(y,m);
   const expData = getMonthExpenses(y,m);
-  const balance = totalEarn - expData.total;
-  return { q1h,q2h,q1earn,q2earn,totalHours,totalEarn,absentCount,partialCount,incapCount,q1a,q2a,q1p,q2p,q1i,q2i, expenses:expData.total, balance };
+  const discData = getMonthDiscounts(y,m);
+  const balance = earn.totalEarn - expData.total - discData.total;
+  return { ...earn, expenses:expData.total, discounts:discData.total, q1disc:discData.q1disc, q2disc:discData.q2disc, monthDisc:discData.monthDisc, balance };
 }
 
 function renderResumen(){
@@ -733,16 +851,24 @@ function renderResumen(){
         <div class="card-sub">${expItems.length} concepto${expItems.length!==1?'s':''}</div>
         <div class="card-amount red" style="font-size:18px">${fmt(expTotal)}</div>
       </div>
+      <div class="s-card" style="border-left:3px solid #a855f7">
+        <div class="card-label" style="color:#c084fc">Descuentos Empresa</div>
+        <div class="card-sub">${discounts.length} descuento${discounts.length!==1?'s':''}</div>
+        <div class="card-amount" style="color:#c084fc;font-size:18px">${fmt(c.discounts||0)}</div>
+      </div>
+    </div>
+
+    <div class="summary-grid">
       <div class="s-card ${c.balance>=0?'green':'red'}">
         <div class="card-label" style="color:${c.balance>=0?'#6ee7b7':'#fca5a5'}">Saldo Neto</div>
-        <div class="card-sub">Ingresos − Gastos</div>
+        <div class="card-sub">Ingresos − Gastos − Descuentos</div>
         <div class="card-amount ${c.balance>=0?'green':'red'}" style="font-size:18px">${fmt(c.balance)}</div>
       </div>
     </div>
 
     <div class="balance-card">
       <div class="balance-label">💵 Dinero Real Disponible</div>
-      <div class="balance-eq">Devengado ${fmt(c.totalEarn)} − Gastos ${fmt(expTotal)}</div>
+      <div class="balance-eq">${fmt(c.totalEarn)} − Gastos ${fmt(expTotal)} − Desc. ${fmt(c.discounts||0)}</div>
       <div class="balance-amount">${fmt(c.balance)}</div>
     </div>
 
@@ -939,6 +1065,185 @@ function deleteExpense(src, id){
   renderExpenses();
   toast('🗑️ Gasto eliminado');
 }
+
+// ═══════════════════════════════════════════════════════
+// DESCUENTOS
+// ═══════════════════════════════════════════════════════
+function toggleDiscType(){
+  const t = document.getElementById('disc-type').value;
+  document.getElementById('disc-pct-group').style.display   = t==='pct'?'flex':'none';
+  document.getElementById('disc-fixed-group').style.display = t==='fixed'?'flex':'none';
+}
+
+function addDiscount(){
+  const name  = document.getElementById('disc-name').value.trim();
+  const freq  = document.getElementById('disc-freq').value;
+  const type  = document.getElementById('disc-type').value;
+  const pct   = parseFloat(document.getElementById('disc-pct').value);
+  const fixed = parseInt(document.getElementById('disc-fixed').value);
+  if(!name){ toast('⚠️ Escribe el nombre del descuento'); return; }
+  if(type==='pct'  && (!pct   || pct<=0))  { toast('⚠️ Ingresa el porcentaje'); return; }
+  if(type==='fixed'&& (!fixed || fixed<=0)){ toast('⚠️ Ingresa el valor'); return; }
+  discounts.push({ id: Date.now(), name, freq, type, pct: type==='pct'?pct:null, fixed: type==='fixed'?fixed:null });
+  saveDisc();
+  document.getElementById('disc-name').value='';
+  document.getElementById('disc-pct').value='';
+  document.getElementById('disc-fixed').value='';
+  renderDiscounts();
+  renderResumen();
+  toast('✅ Descuento agregado');
+}
+
+function deleteDiscount(id){
+  discounts = discounts.filter(d=>d.id!==id);
+  saveDisc();
+  renderDiscounts();
+  renderResumen();
+  toast('🗑️ Descuento eliminado');
+}
+
+function renderDiscounts(){
+  const earn = calcMonthEarnings(Y,M);
+  const discData = getMonthDiscounts(Y,M);
+  const quincenales = discounts.filter(d=>d.freq==='quincenal');
+  const mensuales   = discounts.filter(d=>d.freq==='mensual');
+
+  let html = '';
+
+  if(discounts.length===0){
+    html='<div class="empty-state" style="color:#374151;padding:20px">No hay descuentos registrados.<br><span style="font-size:20px">✂️</span></div>';
+  } else {
+    const discItem = d => {
+      const valQ1 = d.type==='pct' ? (d.pct/100)*earn.q1earn : d.fixed;
+      const valQ2 = d.type==='pct' ? (d.pct/100)*earn.q2earn : d.fixed;
+      const valM  = d.type==='pct' ? (d.pct/100)*earn.totalEarn : d.fixed;
+      const label = d.type==='pct' ? `${d.pct}%` : fmt(d.fixed);
+      const preview = d.freq==='quincenal'
+        ? `1ª quincena: ${fmt(valQ1)} · 2ª quincena: ${fmt(valQ2)}`
+        : `Mensual: ${fmt(valM)}`;
+      return `<div class="disc-item ${d.freq}">
+        <div>
+          <div class="exp-name">${d.name}</div>
+          <div class="exp-meta">${d.freq==='quincenal'?'Quincenal':'Mensual'} · ${label}</div>
+          <div class="exp-meta" style="color:#9ca3af;margin-top:2px">${preview}</div>
+        </div>
+        <div class="exp-right">
+          <span class="disc-pct-badge">${label}</span>
+          <button class="exp-del" onclick="deleteDiscount(${d.id})">✕</button>
+        </div>
+      </div>`;
+    };
+
+    if(quincenales.length>0){
+      html+=`<div class="section-title">💜 Descuentos Quincenales</div>`;
+      quincenales.forEach(d=>html+=discItem(d));
+    }
+    if(mensuales.length>0){
+      html+=`<div class="section-title">🔵 Descuentos Mensuales</div>`;
+      mensuales.forEach(d=>html+=discItem(d));
+    }
+
+    html+=`<div class="section-title">✂️ Total Descuentos — ${MONTHS[M]} ${Y}</div>
+      <div class="s-card-full" style="margin-bottom:0;background:linear-gradient(135deg,#1e0a3c,#2e1065)">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div>
+            <div class="card-label" style="color:#c084fc">1ª Quincena</div>
+            <div class="card-amount" style="color:#c084fc;font-size:16px">${fmt(discData.q1disc)}</div>
+          </div>
+          <div>
+            <div class="card-label" style="color:#c084fc">2ª Quincena</div>
+            <div class="card-amount" style="color:#c084fc;font-size:16px">${fmt(discData.q2disc)}</div>
+          </div>
+        </div>
+        <div class="card-label" style="color:#e9d5ff">Total Mes</div>
+        <div class="card-amount" style="color:#e9d5ff;font-size:24px">${fmt(discData.total)}</div>
+      </div>`;
+  }
+
+  document.getElementById('discount-list-content').innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════
+// NOTIFICACIONES
+// ═══════════════════════════════════════════════════════
+const NOTIF_KEY = 'turnos_notif';
+let notifEnabled = localStorage.getItem(NOTIF_KEY) === 'true';
+
+function renderNotifStatus(){
+  const btn = document.getElementById('notif-toggle-btn');
+  const status = document.getElementById('notif-status');
+  if(!('Notification' in window)){
+    btn.textContent='No disponible';
+    btn.style.cssText='background:#374151;color:#9ca3af;border-radius:20px;padding:7px 16px;font-size:12px;font-weight:700;cursor:not-allowed;font-family:Outfit,sans-serif;border:none;';
+    status.textContent='Tu dispositivo no soporta notificaciones.';
+    return;
+  }
+  if(notifEnabled && Notification.permission==='granted'){
+    btn.textContent='Desactivar 🔕';
+    btn.style.cssText='background:#7f1d1d;color:#fca5a5;border-radius:20px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:Outfit,sans-serif;border:none;';
+    // Find tomorrow's shift
+    const tom = new Date(today); tom.setDate(tom.getDate()+1);
+    const s = SHIFTS[effShift(tom.getFullYear(), tom.getMonth(), tom.getDate())];
+    status.innerHTML=`✅ Activadas · Mañana: <b style="color:${s.color}">${s.icon} ${s.label}</b>`;
+  } else {
+    btn.textContent='Activar 🔔';
+    btn.style.cssText='background:#14532d;color:#6ee7b7;border-radius:20px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:Outfit,sans-serif;border:none;';
+    status.textContent = Notification.permission==='denied'
+      ? '⚠️ Bloqueadas en tu navegador. Actívalas en Configuración.'
+      : 'Desactivadas';
+  }
+}
+
+async function toggleNotifications(){
+  if(!('Notification' in window)){ toast('Tu dispositivo no soporta notificaciones'); return; }
+  if(notifEnabled){
+    notifEnabled=false;
+    localStorage.setItem(NOTIF_KEY,'false');
+    toast('🔕 Notificaciones desactivadas');
+    renderNotifStatus();
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  if(perm==='granted'){
+    notifEnabled=true;
+    localStorage.setItem(NOTIF_KEY,'true');
+    scheduleNotification();
+    toast('🔔 Notificaciones activadas');
+  } else {
+    toast('⚠️ Permiso denegado. Actívalo en configuración del navegador.');
+  }
+  renderNotifStatus();
+}
+
+function scheduleNotification(){
+  if(!notifEnabled || Notification.permission!=='granted') return;
+  // Schedule for 8pm tonight
+  const now = new Date();
+  const fire = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0, 0);
+  if(fire <= now) fire.setDate(fire.getDate()+1); // if past 8pm, schedule for tomorrow's 8pm
+  const delay = fire - now;
+  setTimeout(()=>{
+    const tom = new Date(); tom.setDate(tom.getDate()+1);
+    const eff = effShift(tom.getFullYear(), tom.getMonth(), tom.getDate());
+    const s = SHIFTS[eff];
+    if(eff!=='DESCANSO'){
+      new Notification('📅 Mis Turnos — Mañana', {
+        body: `Tu turno de mañana es ${s.icon} ${s.label}`,
+        icon: 'https://api.iconify.design/twemoji:calendar.svg'
+      });
+    } else {
+      new Notification('📅 Mis Turnos — Mañana', {
+        body: '😴 Mañana es día de descanso',
+        icon: 'https://api.iconify.design/twemoji:calendar.svg'
+      });
+    }
+    // Reschedule for next day
+    scheduleNotification();
+  }, delay);
+}
+
+// Auto-schedule on load if enabled
+if(notifEnabled && Notification.permission==='granted') scheduleNotification();
 
 // ═══════════════════════════════════════════════════════
 // MODAL
@@ -1232,40 +1537,11 @@ function exportPDF(){
 // ═══════════════════════════════════════════════════════
 // PWA
 // ═══════════════════════════════════════════════════════
-const manifest={name:"Calendario de Turnos 2×2",short_name:"Mis Turnos",start_url:"./",display:"standalone",background_color:"#060b18",theme_color:"#4f46e5",icons:[{src:"https://api.iconify.design/twemoji:calendar.svg",sizes:"any",type:"image/svg+xml"}]};
-const mBlob=new Blob([JSON.stringify(manifest)],{type:'application/json'});
-const mLink=document.createElement('link'); mLink.rel='manifest'; mLink.href=URL.createObjectURL(mBlob);
-document.head.appendChild(mLink);
-
 // ── VERSION: cambia este número cada vez que subas cambios a GitHub ──
-const APP_VERSION = '1.1';
+const APP_VERSION = '1.2';
 
 if('serviceWorker' in navigator){
-  // Service worker que siempre va a la red, nunca cachea — así GitHub Pages
-  // sirve la versión más reciente cada vez que hay conexión.
-  const sw = `
-    const VER = '${APP_VERSION}';
-    self.addEventListener('install', e => { self.skipWaiting(); });
-    self.addEventListener('activate', e => { e.waitUntil(clients.claim()); });
-    self.addEventListener('fetch', e => {
-      // Siempre intenta la red; si falla, responde "Offline"
-      e.respondWith(
-        fetch(e.request, { cache: 'no-store' }).catch(() => new Response(
-          '<h2 style="font-family:sans-serif;text-align:center;padding:40px">Sin conexión 📵<br><small>Abre la app cuando tengas internet para ver la versión más reciente.</small></h2>',
-          { headers: { 'Content-Type': 'text/html' } }
-        ))
-      );
-    });
-    // Escucha mensajes del cliente (para forzar actualización)
-    self.addEventListener('message', e => {
-      if(e.data === 'SKIP_WAITING') self.skipWaiting();
-    });
-  `;
-  const swBlob = new Blob([sw], {type:'application/javascript'});
-  const swURL  = URL.createObjectURL(swBlob);
-
-  navigator.serviceWorker.register(swURL).then(reg => {
-    // Revisa si hay una nueva versión cada vez que se abre la app
+  navigator.serviceWorker.register('./sw.js').then(reg => {
     reg.update();
     reg.addEventListener('updatefound', () => {
       const newWorker = reg.installing;
