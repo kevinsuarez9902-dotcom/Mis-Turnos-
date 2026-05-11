@@ -68,6 +68,22 @@
       font-family: 'DM Mono', monospace;
       font-size: 11px; color: var(--text-muted); margin-top: 6px;
     }
+    .install-btn {
+      display: none; margin-top: 10px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border: none; border-radius: 12px; padding: 9px 18px;
+      color: white; font-family: 'Outfit', sans-serif; font-size: 13px;
+      font-weight: 600; cursor: pointer;
+    }
+    .install-btn.visible { display: inline-flex; align-items: center; gap: 6px; }
+    .install-btn {
+      display: none; margin-top: 10px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border: none; border-radius: 12px; padding: 9px 18px;
+      color: white; font-family: 'Outfit', sans-serif; font-size: 13px;
+      font-weight: 600; cursor: pointer;
+    }
+    .install-btn.visible { display: inline-flex; align-items: center; gap: 6px; }
 
     /* ── TABS ── */
     .tabs {
@@ -418,6 +434,7 @@
   <div class="header-sub">Mis Turnos</div>
   <div class="header-title">Calendario 2×2</div>
   <div class="header-rate" id="header-rate"></div>
+  <button class="install-btn" id="install-btn" onclick="triggerInstall()">📲 Instalar app</button>
 </div>
 
 <!-- TABS -->
@@ -1539,6 +1556,32 @@ function exportPDF(){
 // ═══════════════════════════════════════════════════════
 // ── VERSION: cambia este número cada vez que subas cambios a GitHub ──
 const APP_VERSION = '1.2';
+
+let deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const btn = document.getElementById('install-btn');
+  if(btn) btn.classList.add('visible');
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  const btn = document.getElementById('install-btn');
+  if(btn) btn.classList.remove('visible');
+});
+
+function triggerInstall(){
+  if(deferredInstallPrompt){
+    deferredInstallPrompt.prompt();
+    deferredInstallPrompt.userChoice.then(() => {
+      deferredInstallPrompt = null;
+      const btn = document.getElementById('install-btn');
+      if(btn) btn.classList.remove('visible');
+    });
+  }
+}
 
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('./sw.js').then(reg => {
