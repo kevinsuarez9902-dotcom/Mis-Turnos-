@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Mis Turnos">
+  <title>Mis Turnos 2×2</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+    :root {
+      --bg-deep: #060b18;
+      --bg-mid: #0d1528;
+      --bg-card: #111827;
+      --accent: #6366f1;
+      --accent2: #8b5cf6;
+      --accent3: #ec4899;
+      --blue: #3b82f6;
+      --green: #10b981;
+      --red: #ef4444;
+      --amber: #f59e0b;
+      --text: #e2e8f0;
+      --text-muted: #64748b;
+      --border: rgba(255,255,255,0.07);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg-deep);
+      font-family: 'Outfit', sans-serif;
+      color: var(--text);
+      padding: 0 0 80px;
+      overscroll-behavior: none;
+    }
+
+    /* ── HEADER ── */
+    .app-header {
+      background: linear-gradient(180deg, #0d1a3a 0%, var(--bg-deep) 100%);
+      padding: 28px 18px 20px;
+      border-bottom: 1px solid rgba(99,102,241,0.15);
+      position: relative;
+      overflow: hidden;
+    }
+    .app-header::before {
+      content: '';
+      position: absolute;
+      top: -60px; left: 50%;
+      transform: translateX(-50%);
+      width: 300px; height: 150px;
+      background: radial-gradient(ellipse, rgba(99,102,241,0.25) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .header-sub { font-size: 10px; letter-spacing: 4px; color: var(--accent); text-transform: uppercase; margin-bottom: 4px; font-weight: 500; }
+    .header-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: 28px;
+      background: linear-gradient(90deg, #a5b4fc, #f0abfc, #fbcfe8);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      line-height: 1.1;
+    }
+    .header-rate {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px; color: var(--text-muted); margin-top: 6px;
+    }
+
+    /* ── TABS ── */
+    .tabs {
+      display: flex; background: rgba(255,255,255,0.03);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 50;
+    }
+    .tab {
+      flex: 1; padding: 12px 6px; text-align: center;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+      color: var(--text-muted); cursor: pointer; border: none;
+      background: none; transition: color 0.2s; position: relative;
+      font-family: 'Outfit', sans-serif;
+    }
+    .tab.active { color: var(--accent); }
+    .tab.active::after {
+      content: ''; position: absolute; bottom: 0; left: 15%; right: 15%;
+      height: 2px; background: var(--accent); border-radius: 2px 2px 0 0;
+    }
+    .tab-icon { font-size: 15px; display: block; margin-bottom: 2px; }
+
+    /* ── SECTIONS ── */
+    .section { display: none; padding: 16px 14px; }
+    .section.active { display: block; }
+
+    /* ── CARDS ── */
+    .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .s-card {
+      border-radius: 16px; padding: 13px 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      position: relative; overflow: hidden;
+    }
+    .s-card::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 2px;
+    }
+    .s-card.blue::before { background: linear-gradient(90deg, var(--blue), transparent); }
+    .s-card.purple::before { background: linear-gradient(90deg, var(--accent2), transparent); }
+    .s-card.green::before { background: linear-gradient(90deg, var(--green), transparent); }
+    .s-card.red::before { background: linear-gradient(90deg, var(--red), transparent); }
+    .s-card.amber::before { background: linear-gradient(90deg, var(--amber), transparent); }
+    .s-card-full {
+      border-radius: 16px; padding: 16px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      margin-bottom: 10px; position: relative; overflow: hidden;
+    }
+    .s-card-full::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent3));
+    }
+    .card-label {
+      font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 3px; font-weight: 600;
+    }
+    .card-sub { font-size: 10px; color: var(--text-muted); margin-bottom: 3px; }
+    .card-detail { font-size: 11px; color: #7dd3fc; margin-bottom: 6px; }
+    .card-amount {
+      font-family: 'DM Mono', monospace;
+      font-size: 20px; font-weight: 500;
+    }
+    .card-amount.lg { font-size: 26px; }
+    .card-amount.green { color: var(--green); }
+    .card-amount.blue { color: #60a5fa; }
+    .card-amount.red { color: var(--red); }
+    .card-amount.amber { color: var(--amber); }
+    .card-amount.purple { color: #c084fc; }
+
+    /* balance card */
+    .balance-card {
+      background: linear-gradient(135deg, #0c1f0e 0%, #0d1a3a 100%);
+      border: 1px solid rgba(16,185,129,0.25);
+      border-radius: 16px; padding: 16px; margin-bottom: 10px;
+      position: relative; overflow: hidden;
+    }
+    .balance-card::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--green), #34d399, transparent);
+    }
+    .balance-label { font-size: 9px; letter-spacing: 3px; color: #6ee7b7; text-transform: uppercase; font-weight: 600; margin-bottom: 4px; }
+    .balance-eq { font-size: 10px; color: #6ee7b7; margin-bottom: 8px; opacity: 0.7; }
+    .balance-amount {
+      font-family: 'DM Mono', monospace;
+      font-size: 30px; font-weight: 500; color: #34d399;
+    }
+
+    /* ── BADGES ── */
+    .badges { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+    .badge {
+      border-radius: 20px; padding: 4px 10px; font-size: 10px;
+      font-weight: 600; display: flex; align-items: center; gap: 3px;
+    }
+
+    /* ── MONTH NAV ── */
+    .month-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(255,255,255,0.04); border-radius: 14px;
+      padding: 8px 12px; border: 1px solid var(--border); margin-bottom: 10px;
+    }
+    .nav-btn {
+      background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.25);
+      color: #a5b4fc; border-radius: 9px; width: 36px; height: 36px;
+      font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .nav-btn:active { background: rgba(99,102,241,0.3); }
+    .month-label { text-align: center; }
+    .month-name { font-family: 'DM Serif Display', serif; font-size: 18px; color: #c7d2fe; }
+    .month-year { font-size: 12px; color: #6366f1; font-weight: 500; }
+    .today-btn {
+      display: block; margin: 0 auto 11px;
+      background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.3);
+      color: #a5b4fc; border-radius: 20px; padding: 5px 20px;
+      font-size: 11px; cursor: pointer; font-family: 'Outfit', sans-serif; font-weight: 500;
+    }
+
+    /* ── CALENDAR ── */
+    .day-headers { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; margin-bottom: 3px; }
+    .day-header { text-align: center; font-size: 9px; color: var(--accent); font-weight: 700; letter-spacing: 1px; padding: 3px 0; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; }
+    .cal-cell {
+      border-radius: 10px; padding: 4px 2px; text-align: center;
+      min-height: 60px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      position: relative; cursor: pointer;
+      transition: transform 0.1s, opacity 0.1s; user-select: none;
+    }
+    .cal-cell:active { transform: scale(0.91); opacity: 0.85; }
+    .cal-empty { min-height: 60px; }
+    .cell-day { font-size: 13px; margin-bottom: 1px; font-weight: 500; }
+    .cell-icon { font-size: 14px; }
+    .cell-label { font-size: 7px; font-weight: 700; letter-spacing: 0.5px; margin-top: 1px; text-transform: uppercase; }
+    .cell-hours { font-size: 7px; font-weight: 600; margin-top: 1px; }
+    .cell-q1 { position: absolute; top: 2px; right: 2px; font-size: 6px; color: var(--blue); font-weight: 700; }
+    .cell-dot { position: absolute; top: 2px; left: 2px; width: 5px; height: 5px; border-radius: 50%; background: var(--red); }
+    .cell-partial { position: absolute; bottom: 2px; right: 2px; width: 5px; height: 5px; border-radius: 50%; background: var(--amber); }
+    .cell-expense { position: absolute; bottom: 2px; left: 2px; font-size: 7px; }
+
+    /* ── ABSENT / PARTIAL LIST ── */
+    .section-title {
+      font-size: 10px; letter-spacing: 3px; color: var(--text-muted);
+      text-transform: uppercase; text-align: center; margin: 18px 0 10px;
+      font-weight: 600;
+    }
+    .override-item {
+      border-radius: 12px; padding: 10px 12px;
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 6px;
+    }
+    .override-item.absent { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); }
+    .override-item.partial { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); }
+    .override-date { font-weight: 600; font-size: 12px; margin-bottom: 2px; }
+    .override-date.absent { color: #fca5a5; }
+    .override-date.partial { color: #fcd34d; }
+    .override-orig { font-size: 10px; color: var(--text-muted); }
+    .override-remove {
+      border-radius: 8px; padding: 5px 10px; font-size: 10px; cursor: pointer;
+      font-family: 'Outfit', sans-serif; font-weight: 600;
+    }
+    .override-remove.absent { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.25); color: var(--red); }
+    .override-remove.partial { background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.25); color: var(--amber); }
+    .empty-state { text-align: center; font-size: 12px; color: #374151; padding: 12px; }
+
+    /* ── EXPENSES ── */
+    .expense-form {
+      background: var(--bg-card); border-radius: 16px;
+      border: 1px solid var(--border); padding: 16px; margin-bottom: 14px;
+    }
+    .form-title { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; }
+    .form-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: flex-end; }
+    .form-group { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+    .form-label { font-size: 10px; font-weight: 600; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
+    .form-input {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px; padding: 10px 12px; color: var(--text);
+      font-family: 'Outfit', sans-serif; font-size: 13px;
+      outline: none; transition: border-color 0.2s; width: 100%;
+      -webkit-appearance: none;
+    }
+    .form-input:focus { border-color: var(--accent); }
+    .form-select {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px; padding: 10px 12px; color: var(--text);
+      font-family: 'Outfit', sans-serif; font-size: 13px;
+      outline: none; width: 100%; -webkit-appearance: none;
+      cursor: pointer;
+    }
+    .form-select option { background: #1e2640; }
+    .btn-add {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none; border-radius: 12px; padding: 11px 16px;
+      color: white; font-family: 'Outfit', sans-serif; font-size: 13px;
+      font-weight: 600; cursor: pointer; white-space: nowrap;
+      transition: opacity 0.2s;
+    }
+    .btn-add:active { opacity: 0.8; }
+
+    .expense-list { display: flex; flex-direction: column; gap: 6px; }
+    .exp-item {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 10px 13px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .exp-item.monthly { border-left: 3px solid var(--accent2); }
+    .exp-item.daily { border-left: 3px solid var(--amber); }
+    .exp-name { font-size: 13px; font-weight: 500; color: var(--text); }
+    .exp-meta { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+    .exp-right { display: flex; align-items: center; gap: 8px; }
+    .exp-amount {
+      font-family: 'DM Mono', monospace;
+      font-size: 13px; font-weight: 500; color: var(--red);
+    }
+    .exp-del { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); color: var(--red); border-radius: 8px; padding: 4px 8px; font-size: 11px; cursor: pointer; }
+
+    /* ── FOOTER ── */
+    .footer {
+      margin-top: 16px; padding: 12px; background: rgba(255,255,255,0.03);
+      border-radius: 12px; border: 1px solid var(--border);
+      font-size: 10px; color: #374151; text-align: center; line-height: 2;
+    }
+
+    /* ── PDF EXPORT BTN ── */
+    .pdf-btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, #1a1035, #2d1b69);
+      border: 1px solid rgba(139,92,246,0.4); border-radius: 14px;
+      color: #c4b5fd; font-family: 'Outfit', sans-serif; font-size: 14px;
+      font-weight: 600; cursor: pointer; margin-bottom: 12px;
+      transition: opacity 0.2s;
+    }
+    .pdf-btn:active { opacity: 0.8; }
+
+    /* ── MODALS ── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+      display: flex; align-items: flex-end; z-index: 100;
+      opacity: 0; pointer-events: none; transition: opacity 0.25s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal-sheet {
+      width: 100%; background: #13172e; border-radius: 24px 24px 0 0;
+      padding: 20px 20px 44px;
+      transform: translateY(100%); transition: transform 0.3s ease;
+      border-top: 1px solid rgba(99,102,241,0.25);
+      max-height: 92vh; overflow-y: auto;
+    }
+    .modal-overlay.open .modal-sheet { transform: translateY(0); }
+    .modal-handle { width: 36px; height: 4px; background: rgba(99,102,241,0.5); border-radius: 2px; margin: 0 auto 18px; }
+    .modal-date { font-size: 12px; color: #818cf8; margin-bottom: 5px; text-align: center; letter-spacing: 1px; }
+    .modal-shift-box { text-align: center; padding: 14px; border-radius: 14px; margin-bottom: 16px; }
+    .modal-shift-icon { font-size: 36px; margin-bottom: 6px; }
+    .modal-shift-name { font-size: 16px; font-weight: 600; font-family: 'DM Serif Display', serif; }
+    .modal-shift-detail { font-size: 12px; margin-top: 4px; opacity: 0.75; }
+    .modal-notice { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 10px; padding: 9px 12px; margin-bottom: 14px; font-size: 12px; color: #fca5a5; text-align: center; }
+    .modal-partial-notice { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); border-radius: 10px; padding: 9px 12px; margin-bottom: 14px; font-size: 12px; color: #fcd34d; text-align: center; }
+    .modal-section-label { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; margin-top: 4px; }
+    .hours-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 14px; }
+    .hour-btn {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px; padding: 8px 4px; text-align: center;
+      font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text);
+      cursor: pointer; transition: all 0.15s; font-weight: 500;
+    }
+    .hour-btn:active { transform: scale(0.95); }
+    .hour-btn.selected { background: rgba(245,158,11,0.2); border-color: var(--amber); color: var(--amber); }
+    .hour-custom { display: flex; gap: 8px; margin-bottom: 14px; }
+    .modal-btn { width: 100%; padding: 13px; border-radius: 13px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 8px; font-family: 'Outfit', sans-serif; transition: opacity 0.2s; }
+    .modal-btn:active { opacity: 0.8; }
+    .btn-absent  { background: linear-gradient(135deg,#7f1d1d,#dc2626); color: white; }
+    .btn-partial { background: linear-gradient(135deg,#78350f,#d97706); color: white; }
+    .btn-restore { background: linear-gradient(135deg,#14532d,#16a34a); color: white; }
+    .btn-close   { background: rgba(99,102,241,0.1); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.25) !important; }
+
+    /* ── TOAST ── */
+    .toast {
+      position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%) translateY(20px);
+      background: #1e1b4b; border: 1px solid var(--accent); color: #c7d2fe;
+      padding: 10px 20px; border-radius: 20px; font-size: 12px; font-weight: 500;
+      opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap; z-index: 200;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── PRINT / PDF ── */
+    @media print {
+      @page { margin: 15mm; size: A4; }
+      body { background: white !important; color: #111 !important; padding: 0; font-family: 'Outfit', sans-serif; }
+      .tabs, .today-btn, .nav-btn, .btn-add, .exp-del, .override-remove, .pdf-btn, .modal-overlay, .toast { display: none !important; }
+      .section { display: block !important; padding: 0; }
+      #section-calendar { display: none !important; }
+      #section-expenses { display: none !important; }
+      #print-report { display: block !important; }
+      .print-header { text-align: center; border-bottom: 2px solid #6366f1; padding-bottom: 12px; margin-bottom: 20px; }
+      .print-title { font-family: 'DM Serif Display', serif; font-size: 26px; color: #312e81; }
+      .print-sub { font-size: 12px; color: #666; margin-top: 4px; }
+      .print-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+      .print-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; }
+      .print-card-label { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: #6b7280; margin-bottom: 4px; font-weight: 600; }
+      .print-card-val { font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 500; color: #111; }
+      .print-card-sub { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+      .print-balance { background: #f0fdf4; border: 1px solid #86efac; border-radius: 10px; padding: 16px; text-align: center; margin-bottom: 20px; }
+      .print-balance-label { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: #166534; font-weight: 600; margin-bottom: 4px; }
+      .print-balance-val { font-family: 'DM Mono', monospace; font-size: 28px; color: #15803d; font-weight: 500; }
+      .print-section-title { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: #6b7280; font-weight: 700; margin: 18px 0 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; }
+      .print-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 16px; }
+      .print-table th { background: #f9fafb; padding: 7px 10px; text-align: left; font-weight: 700; color: #374151; border-bottom: 2px solid #e5e7eb; }
+      .print-table td { padding: 6px 10px; border-bottom: 1px solid #f3f4f6; color: #374151; }
+      .print-table tr:nth-child(even) td { background: #fafafa; }
+      .print-footer { margin-top: 24px; text-align: center; font-size: 9px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+    }
+    #print-report { display: none; }
+  </style>
+</head>
+<body>
+
+<!-- APP HEADER -->
+<div class="app-header">
+  <div class="header-sub">Mis Turnos</div>
+  <div class="header-title">Calendario 2×2</div>
+  <div class="header-rate" id="header-rate"></div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('resumen')" id="tab-resumen">
+    <span class="tab-icon">📊</span>RESUMEN
+  </button>
+  <button class="tab" onclick="switchTab('calendar')" id="tab-calendar">
+    <span class="tab-icon">📅</span>TURNOS
+  </button>
+  <button class="tab" onclick="switchTab('gastos')" id="tab-gastos">
+    <span class="tab-icon">💸</span>GASTOS
+  </button>
+</div>
+
+<!-- SECTION: RESUMEN -->
+<div class="section active" id="section-resumen">
+  <div id="resumen-content"></div>
+</div>
+
+<!-- SECTION: CALENDAR / TURNOS -->
+<div class="section" id="section-calendar">
+  <div id="cal-content"></div>
+</div>
+
+<!-- SECTION: GASTOS -->
+<div class="section" id="section-expenses">
+  <div class="expense-form">
+    <div class="form-title">➕ Agregar Gasto</div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label class="form-label">Descripción</label>
+        <input class="form-input" id="exp-name" type="text" placeholder="ej. Arriendo, gasolina..." />
+      </div>
+      <div class="form-group" style="flex:1">
+        <label class="form-label">Tipo</label>
+        <select class="form-select" id="exp-type">
+          <option value="monthly">Mensual</option>
+          <option value="daily">Diario</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label class="form-label">Valor ($)</label>
+        <input class="form-input" id="exp-amount" type="number" placeholder="0" inputmode="numeric" />
+      </div>
+      <div class="form-group" style="flex:1" id="exp-date-group">
+        <label class="form-label">Día (si diario)</label>
+        <input class="form-input" id="exp-day" type="number" placeholder="1-31" min="1" max="31" inputmode="numeric" />
+      </div>
+    </div>
+    <button class="btn-add" onclick="addExpense()" style="width:100%">Agregar Gasto</button>
+  </div>
+  <div id="expense-list-content"></div>
+</div>
+
+<!-- PRINT REPORT (hidden, shown only on print) -->
+<div id="print-report"></div>
+
+<!-- MODAL: TURNO -->
+<div class="modal-overlay" id="modal" onclick="closeBg(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-date" id="m-date"></div>
+    <div class="modal-shift-box" id="m-shift"></div>
+    <div class="modal-notice" id="m-notice" style="display:none">🚫 Este día fue marcado como <b>no laborado</b></div>
+    <div class="modal-partial-notice" id="m-partial" style="display:none">⏱️ Turno parcial registrado</div>
+
+    <!-- Partial hours selector -->
+    <div id="partial-selector" style="display:none">
+      <div class="modal-section-label">Horas trabajadas (turno parcial)</div>
+      <div class="hours-grid" id="hours-grid"></div>
+    </div>
+
+    <button class="modal-btn btn-partial" id="btn-partial" onclick="showPartialSelector()">⏱️ Turno parcial (menos de 12h)</button>
+    <button class="modal-btn btn-absent"  id="btn-absent"  onclick="markAbsent()">😔 No fui a trabajar</button>
+    <button class="modal-btn btn-restore" id="btn-restore" onclick="restoreDay()" style="display:none">✅ Restaurar turno original</button>
+    <button class="modal-btn btn-close"   onclick="closeModal()">Cerrar</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// CONFIGURATION
+// ═══════════════════════════════════════════════════════
+const START  = new Date(2026, 4, 12);
+const CYCLE  = ['DÍA','DÍA','NOCHE','NOCHE','DESCANSO','DESCANSO'];
+const RATE   = 30937;
+const HOURS  = 12;
+const PSHIFT = RATE * HOURS;
+
+const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const WDAYS  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const WFULL  = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+const SHIFTS = {
+  'DÍA':     {bg:'#FFF3CD',color:'#8B6914',border:'#F0C040',icon:'☀️',label:'Día'},
+  'NOCHE':   {bg:'#1a1a2e',color:'#A78BFA',border:'#5B21B6',icon:'🌙',label:'Noche'},
+  'DESCANSO':{bg:'#DCFCE7',color:'#166534',border:'#4ADE80',icon:'😴',label:'Descanso'},
+  'AUSENTE': {bg:'#2d0a0a',color:'#f87171',border:'#7f1d1d',icon:'🚫',label:'Ausente'},
+  'PARCIAL': {bg:'#1c1200',color:'#fbbf24',border:'#d97706',icon:'⏱️',label:'Parcial'},
+};
+
+const today  = new Date(); today.setHours(0,0,0,0);
+let Y = today.getFullYear(), M = today.getMonth(), selKey = null;
+
+// Storage keys
+const OV_KEY  = 'turnos_ov2';
+const EXP_KEY = 'turnos_exp';
+
+let overrides = JSON.parse(localStorage.getItem(OV_KEY)  || '{}');
+let expenses  = JSON.parse(localStorage.getItem(EXP_KEY) || '[]');
+// overrides[key] = true (absent) | number (partial hours)
+
+// ═══════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════
+const key     = (y,m,d) => `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+const dim     = (y,m)   => new Date(y,m+1,0).getDate();
+const fday    = (y,m)   => new Date(y,m,1).getDay();
+const fmt     = n       => '$' + Math.round(n).toLocaleString('es-CO');
+const fmtLabel= k       => { const [y,mo,d]=k.split('-'); return `${parseInt(d)} de ${MONTHS[parseInt(mo)-1]} ${y}`; };
+const save    = ()      => { localStorage.setItem(OV_KEY, JSON.stringify(overrides)); };
+const saveExp = ()      => { localStorage.setItem(EXP_KEY, JSON.stringify(expenses)); };
+
+document.getElementById('header-rate').textContent =
+  `${fmt(RATE)}/hora · ${HOURS}h/turno · ${fmt(PSHIFT)}/turno`;
+
+function origShift(y,m,d){
+  const dt=new Date(y,m,d); dt.setHours(0,0,0,0);
+  const diff=Math.floor((dt-START)/86400000);
+  return CYCLE[((diff%6)+6)%6];
+}
+function effShift(y,m,d){
+  const o=origShift(y,m,d);
+  if(o==='DESCANSO') return 'DESCANSO';
+  const ov=overrides[key(y,m,d)];
+  if(ov===true) return 'AUSENTE';
+  if(typeof ov==='number') return 'PARCIAL';
+  return o;
+}
+function effHours(y,m,d){
+  const eff=effShift(y,m,d);
+  if(eff==='AUSENTE'||eff==='DESCANSO') return 0;
+  if(eff==='PARCIAL') return overrides[key(y,m,d)];
+  return HOURS;
+}
+function effEarnings(y,m,d){
+  return effHours(y,m,d) * RATE;
+}
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+// ═══════════════════════════════════════════════════════
+// EXPENSES HELPERS
+// ═══════════════════════════════════════════════════════
+function getMonthExpenses(y,m){
+  // monthly = always counted; daily = if day exists in month
+  const totalDays = dim(y,m);
+  let total = 0;
+  const items = [];
+  expenses.forEach(exp => {
+    if(exp.type==='monthly'){
+      total += exp.amount;
+      items.push({...exp, appliedAmount: exp.amount, note: 'Mensual'});
+    } else {
+      // daily: if day <= totalDays, counts once per month
+      const d = parseInt(exp.day);
+      if(d >= 1 && d <= totalDays){
+        total += exp.amount;
+        items.push({...exp, appliedAmount: exp.amount, note: `Día ${d} de cada mes`});
+      }
+    }
+  });
+  return { total, items };
+}
+
+function hasDayExpense(y,m,d){
+  return expenses.some(e => e.type==='daily' && parseInt(e.day)===d);
+}
+
+// ═══════════════════════════════════════════════════════
+// TAB NAVIGATION
+// ═══════════════════════════════════════════════════════
+function switchTab(tab){
+  ['resumen','calendar','gastos'].forEach(t=>{
+    document.getElementById('section-'+( t==='calendar'?'calendar': t==='gastos'?'expenses':t)).classList.toggle('active', t===tab);
+    document.getElementById('tab-'+(t==='gastos'?'gastos':t==='calendar'?'calendar':'resumen')).classList.toggle('active', t===tab);
+  });
+  if(tab==='calendar') renderCal();
+  if(tab==='gastos') renderExpenses();
+  if(tab==='resumen') renderResumen();
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER: RESUMEN
+// ═══════════════════════════════════════════════════════
+function calcMonth(y,m){
+  const total=dim(y,m);
+  let q1h=0,q2h=0,q1earn=0,q2earn=0;
+  let q1a=0,q2a=0,q1p=0,q2p=0;
+  let totalHours=0, totalEarn=0, absentCount=0, partialCount=0;
+  for(let d=1;d<=total;d++){
+    const eff=effShift(y,m,d);
+    const h=effHours(y,m,d);
+    const e=h*RATE;
+    totalHours+=h; totalEarn+=e;
+    if(d<=15){ q1h+=h; q1earn+=e; }
+    else { q2h+=h; q2earn+=e; }
+    if(eff==='AUSENTE'){ absentCount++; d<=15?q1a++:q2a++; }
+    if(eff==='PARCIAL'){ partialCount++; d<=15?q1p++:q2p++; }
+  }
+  const expData = getMonthExpenses(y,m);
+  const balance = totalEarn - expData.total;
+  return { q1h,q2h,q1earn,q2earn,totalHours,totalEarn,absentCount,partialCount,q1a,q2a,q1p,q2p, expenses:expData.total, balance };
+}
+
+function renderResumen(){
+  const c = calcMonth(Y,M);
+  const mn = `${MONTHS[M]} ${Y}`;
+  const { items: expItems, total: expTotal } = getMonthExpenses(Y,M);
+
+  // badges
+  let cnt={DÍA:0,NOCHE:0,DESCANSO:0,AUSENTE:0,PARCIAL:0};
+  for(let d=1;d<=dim(Y,M);d++){ cnt[effShift(Y,M,d)]++; }
+
+  const q1w = Math.round(c.q1h/HOURS), q2w = Math.round(c.q2h/HOURS);
+
+  document.getElementById('resumen-content').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <button class="nav-btn" onclick="prevMonth()" style="background:rgba(99,102,241,0.1)">‹</button>
+      <div style="text-align:center">
+        <div style="font-family:'DM Serif Display',serif;font-size:18px;color:#c7d2fe">${MONTHS[M]}</div>
+        <div style="font-size:11px;color:#6366f1;font-weight:500">${Y}</div>
+      </div>
+      <button class="nav-btn" onclick="nextMonth()" style="background:rgba(99,102,241,0.1)">›</button>
+    </div>
+
+    <div class="badges">
+      <span class="badge" style="background:#FFF3CD22;color:#ca8a04;border:1px solid #ca8a0444">☀️ Día: ${cnt.DÍA}</span>
+      <span class="badge" style="background:#1a1a2e;color:#A78BFA;border:1px solid #5B21B644">🌙 Noche: ${cnt.NOCHE}</span>
+      <span class="badge" style="background:#DCFCE722;color:#166534;border:1px solid #4ADE8044">😴 Descanso: ${cnt.DESCANSO}</span>
+      ${cnt.AUSENTE>0?`<span class="badge" style="background:#2d0a0a;color:#f87171;border:1px solid #7f1d1d">🚫 Ausente: ${cnt.AUSENTE}</span>`:''}
+      ${cnt.PARCIAL>0?`<span class="badge" style="background:#1c120022;color:#fbbf24;border:1px solid #d9770644">⏱️ Parcial: ${cnt.PARCIAL}</span>`:''}
+    </div>
+
+    <div class="summary-grid">
+      <div class="s-card blue">
+        <div class="card-label" style="color:#93c5fd">1ª Quincena</div>
+        <div class="card-sub">Días 1 – 15</div>
+        <div class="card-detail">${c.q1h}h · ${q1w} turnos${c.q1a>0?` · <span style="color:var(--red)">-${c.q1a} aus.</span>`:''}${c.q1p>0?` · <span style="color:var(--amber)">${c.q1p} parc.</span>`:''}</div>
+        <div class="card-amount blue">${fmt(c.q1earn)}</div>
+      </div>
+      <div class="s-card blue">
+        <div class="card-label" style="color:#93c5fd">2ª Quincena</div>
+        <div class="card-sub">Días 16 – ${dim(Y,M)}</div>
+        <div class="card-detail">${c.q2h}h · ${q2w} turnos${c.q2a>0?` · <span style="color:var(--red)">-${c.q2a} aus.</span>`:''}${c.q2p>0?` · <span style="color:var(--amber)">${c.q2p} parc.</span>`:''}</div>
+        <div class="card-amount blue">${fmt(c.q2earn)}</div>
+      </div>
+    </div>
+
+    <div class="s-card-full">
+      <div class="card-label" style="color:#c4b5fd">💰 Total Devengado — ${mn}</div>
+      <div class="card-detail" style="color:#c4b5fd">${c.totalHours}h trabajadas${c.absentCount>0?` · ${c.absentCount} ausencia${c.absentCount>1?'s':''}`:''}</div>
+      <div class="card-amount purple lg">${fmt(c.totalEarn)}</div>
+    </div>
+
+    <div class="summary-grid">
+      <div class="s-card red">
+        <div class="card-label" style="color:#fca5a5">Total Gastos</div>
+        <div class="card-sub">${expItems.length} concepto${expItems.length!==1?'s':''}</div>
+        <div class="card-amount red" style="font-size:18px">${fmt(expTotal)}</div>
+      </div>
+      <div class="s-card ${c.balance>=0?'green':'red'}">
+        <div class="card-label" style="color:${c.balance>=0?'#6ee7b7':'#fca5a5'}">Saldo Neto</div>
+        <div class="card-sub">Ingresos − Gastos</div>
+        <div class="card-amount ${c.balance>=0?'green':'red'}" style="font-size:18px">${fmt(c.balance)}</div>
+      </div>
+    </div>
+
+    <div class="balance-card">
+      <div class="balance-label">💵 Dinero Real Disponible</div>
+      <div class="balance-eq">Devengado ${fmt(c.totalEarn)} − Gastos ${fmt(expTotal)}</div>
+      <div class="balance-amount">${fmt(c.balance)}</div>
+    </div>
+
+    <button class="pdf-btn" onclick="exportPDF()">📄 Exportar Reporte PDF — ${mn}</button>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER: CALENDAR
+// ═══════════════════════════════════════════════════════
+function renderCal(){
+  const total=dim(Y,M), first=fday(Y,M);
+  const prefix=`${Y}-${String(M+1).padStart(2,'0')}-`;
+  const monthOv=Object.keys(overrides).filter(k=>k.startsWith(prefix)).sort();
+
+  let cells='';
+  for(let i=0;i<first;i++) cells+=`<div class="cal-empty"></div>`;
+  for(let d=1;d<=total;d++){
+    const o=origShift(Y,M,d), eff=effShift(Y,M,d), s=SHIFTS[eff];
+    const isToday=new Date(Y,M,d).getTime()===today.getTime();
+    const isAbsent=eff==='AUSENTE', isPartial=eff==='PARCIAL', isQ1=d===15;
+    const canClick=o!=='DESCANSO';
+    const h=effHours(Y,M,d);
+    const hasExp=hasDayExpense(Y,M,d);
+    cells+=`<div class="cal-cell"
+      style="background:${s.bg};border:${isToday?'2px solid #f472b6':`1px solid ${s.border}`};box-shadow:${isToday?'0 0 12px rgba(244,114,182,0.5)':isQ1?'0 0 8px rgba(59,130,246,0.35)':'none'};${!canClick?'cursor:default':''}"
+      onclick="${canClick?`openModal(${Y},${M},${d})`:''}">
+      ${isAbsent?'<div class="cell-dot"></div>':''}
+      ${isQ1?'<div class="cell-q1">Q1✓</div>':''}
+      ${isPartial?'<div class="cell-partial"></div>':''}
+      ${hasExp?'<div class="cell-expense">💸</div>':''}
+      <div class="cell-day" style="font-weight:${isToday?'bold':'normal'};color:${isToday?'#f472b6':s.color}">${d}</div>
+      <div class="cell-icon">${s.icon}</div>
+      <div class="cell-label" style="color:${s.color}">${s.label.toUpperCase()}</div>
+      ${(eff!=='DESCANSO'&&eff!=='AUSENTE')?`<div class="cell-hours" style="color:${s.color}">${h}h</div>`:''}
+    </div>`;
+  }
+
+  // overrides list
+  let ovList='';
+  const absentKeys = monthOv.filter(k=>overrides[k]===true);
+  const partialKeys = monthOv.filter(k=>typeof overrides[k]==='number');
+
+  if(absentKeys.length===0 && partialKeys.length===0){
+    ovList='<div class="empty-state">Sin modificaciones en este mes ✓</div>';
+  } else {
+    absentKeys.forEach(k=>{
+      const [,, dd]=k.split('-'), d=parseInt(dd), o=origShift(Y,M,d);
+      ovList+=`<div class="override-item absent">
+        <div><div class="override-date absent">🚫 ${fmtLabel(k)}</div>
+        <div class="override-orig">${SHIFTS[o].icon} ${SHIFTS[o].label} original · −${fmt(PSHIFT)}</div></div>
+        <button class="override-remove absent" onclick="removeOverride('${k}')">Restaurar</button>
+      </div>`;
+    });
+    partialKeys.forEach(k=>{
+      const [,, dd]=k.split('-'), d=parseInt(dd), o=origShift(Y,M,d), h=overrides[k];
+      ovList+=`<div class="override-item partial">
+        <div><div class="override-date partial">⏱️ ${fmtLabel(k)}</div>
+        <div class="override-orig">${SHIFTS[o].icon} ${SHIFTS[o].label} · ${h}h trabajadas · ${fmt(h*RATE)}</div></div>
+        <button class="override-remove partial" onclick="removeOverride('${k}')">Restaurar</button>
+      </div>`;
+    });
+  }
+
+  document.getElementById('cal-content').innerHTML = `
+    <div class="month-nav">
+      <button class="nav-btn" onclick="prevMonth()">‹</button>
+      <div class="month-label">
+        <div class="month-name">${MONTHS[M]}</div>
+        <div class="month-year">${Y}</div>
+      </div>
+      <button class="nav-btn" onclick="nextMonth()">›</button>
+    </div>
+    <button class="today-btn" onclick="goToday()">Hoy</button>
+    <div class="day-headers">${WDAYS.map(d=>`<div class="day-header">${d}</div>`).join('')}</div>
+    <div class="cal-grid">${cells}</div>
+    <div class="section-title">📋 Modificaciones · ${MONTHS[M]}</div>
+    <div>${ovList}</div>
+    <div class="footer">
+      Toca un turno para modificarlo<br>
+      ☀️ Día · 🌙 Noche · 😴 Descanso · ⏱️ Parcial · 🚫 Ausente<br>
+      <span style="color:#f472b6">●</span> Hoy · <span style="color:#f87171">●</span> Ausente · <span style="color:#f59e0b">●</span> Parcial · 💸 Gasto
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER: EXPENSES
+// ═══════════════════════════════════════════════════════
+function renderExpenses(){
+  const { items, total } = getMonthExpenses(Y,M);
+  const monthlyExps = expenses.filter(e=>e.type==='monthly');
+  const dailyExps   = expenses.filter(e=>e.type==='daily');
+
+  let html = '';
+
+  if(expenses.length===0){
+    html='<div class="empty-state" style="color:#374151;padding:20px">No hay gastos registrados.<br><span style="font-size:20px">💸</span></div>';
+  } else {
+    if(monthlyExps.length>0){
+      html+=`<div class="section-title">📅 Gastos Mensuales</div>`;
+      monthlyExps.forEach((e,i)=>{
+        html+=`<div class="exp-item monthly">
+          <div>
+            <div class="exp-name">${e.name}</div>
+            <div class="exp-meta">Se aplica todos los meses</div>
+          </div>
+          <div class="exp-right">
+            <div class="exp-amount">${fmt(e.amount)}</div>
+            <button class="exp-del" onclick="deleteExpense(${expenses.indexOf(e)})">✕</button>
+          </div>
+        </div>`;
+      });
+    }
+    if(dailyExps.length>0){
+      html+=`<div class="section-title">📆 Gastos por Día Fijo</div>`;
+      dailyExps.forEach((e,i)=>{
+        const applies = parseInt(e.day)<=dim(Y,M);
+        html+=`<div class="exp-item daily">
+          <div>
+            <div class="exp-name">${e.name}</div>
+            <div class="exp-meta">Día ${e.day} de cada mes${!applies?' · <span style="color:var(--red)">No aplica este mes</span>':''}</div>
+          </div>
+          <div class="exp-right">
+            <div class="exp-amount">${fmt(e.amount)}</div>
+            <button class="exp-del" onclick="deleteExpense(${expenses.indexOf(e)})">✕</button>
+          </div>
+        </div>`;
+      });
+    }
+    html+=`<div class="section-title">💰 Total en ${MONTHS[M]} ${Y}</div>
+      <div class="s-card-full" style="margin-bottom:0">
+        <div class="card-label" style="color:#fca5a5">Total Gastos del Mes</div>
+        <div class="card-amount red" style="font-size:24px">${fmt(total)}</div>
+      </div>`;
+  }
+
+  document.getElementById('expense-list-content').innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════
+// EXPENSE ACTIONS
+// ═══════════════════════════════════════════════════════
+document.getElementById('exp-type').addEventListener('change', function(){
+  document.getElementById('exp-date-group').style.opacity = this.value==='daily'?'1':'0.4';
+  document.getElementById('exp-day').disabled = this.value!=='daily';
+});
+
+function addExpense(){
+  const name   = document.getElementById('exp-name').value.trim();
+  const type   = document.getElementById('exp-type').value;
+  const amount = parseInt(document.getElementById('exp-amount').value);
+  const day    = parseInt(document.getElementById('exp-day').value);
+  if(!name){ toast('⚠️ Escribe una descripción'); return; }
+  if(!amount || amount<=0){ toast('⚠️ Ingresa un valor válido'); return; }
+  if(type==='daily' && (!day || day<1 || day>31)){ toast('⚠️ Indica el día (1-31)'); return; }
+  expenses.push({ id: Date.now(), name, type, amount, day: type==='daily'?day:null });
+  saveExp();
+  document.getElementById('exp-name').value='';
+  document.getElementById('exp-amount').value='';
+  document.getElementById('exp-day').value='';
+  renderExpenses();
+  toast('✅ Gasto agregado');
+}
+
+function deleteExpense(idx){
+  expenses.splice(idx,1);
+  saveExp();
+  renderExpenses();
+  toast('🗑️ Gasto eliminado');
+}
+
+// ═══════════════════════════════════════════════════════
+// MODAL
+// ═══════════════════════════════════════════════════════
+let partialHoursSelected = null;
+
+function openModal(y,m,d){
+  const o=origShift(y,m,d);
+  if(o==='DESCANSO') return;
+  selKey=key(y,m,d);
+  const ov=overrides[selKey];
+  const absent=ov===true;
+  const partial=typeof ov==='number';
+  const eff=absent?'AUSENTE':partial?'PARCIAL':o;
+  const s=SHIFTS[eff];
+  partialHoursSelected=null;
+
+  document.getElementById('m-date').textContent=`${WFULL[new Date(y,m,d).getDay()]}, ${fmtLabel(selKey)}`;
+  document.getElementById('m-shift').style.cssText=`background:${s.bg}33;border:1px solid ${s.border}`;
+  document.getElementById('m-shift').innerHTML=`
+    <div class="modal-shift-icon">${s.icon}</div>
+    <div class="modal-shift-name" style="color:${s.color}">${s.label}</div>
+    <div class="modal-shift-detail" style="color:${s.color}">${
+      absent?'Turno original: '+SHIFTS[o].icon+' '+SHIFTS[o].label
+      :partial?`${ov}h trabajadas · ${fmt(ov*RATE)}`
+      :HOURS+'h · '+fmt(PSHIFT)
+    }</div>`;
+
+  document.getElementById('m-notice').style.display   = absent?'block':'none';
+  document.getElementById('m-partial').style.display  = partial?'block':'none';
+  document.getElementById('m-partial').textContent    = partial?`⏱️ Turno parcial: ${ov}h trabajadas · ${fmt(ov*RATE)}`:'';
+  document.getElementById('btn-absent').style.display = (absent||partial)?'none':'block';
+  document.getElementById('btn-partial').style.display= (absent||partial)?'none':'block';
+  document.getElementById('btn-restore').style.display= (absent||partial)?'block':'none';
+  document.getElementById('partial-selector').style.display='none';
+
+  document.getElementById('modal').classList.add('open');
+}
+
+function showPartialSelector(){
+  const sel = document.getElementById('partial-selector');
+  sel.style.display='block';
+  document.getElementById('btn-partial').style.display='none';
+  document.getElementById('btn-absent').style.display='none';
+
+  // Build hours grid (1-11)
+  const grid = document.getElementById('hours-grid');
+  grid.innerHTML='';
+  for(let h=1;h<HOURS;h++){
+    const btn=document.createElement('button');
+    btn.className='hour-btn'+(partialHoursSelected===h?' selected':'');
+    btn.textContent=`${h}h`;
+    btn.onclick=()=>{
+      partialHoursSelected=h;
+      grid.querySelectorAll('.hour-btn').forEach(b=>b.classList.remove('selected'));
+      btn.classList.add('selected');
+    };
+    grid.appendChild(btn);
+  }
+  // Confirm button
+  if(!document.getElementById('btn-confirm-partial')){
+    const confirm = document.createElement('button');
+    confirm.id='btn-confirm-partial';
+    confirm.className='modal-btn btn-partial';
+    confirm.textContent='✅ Confirmar turno parcial';
+    confirm.onclick=confirmPartial;
+    sel.after(confirm);
+  }
+  document.getElementById('btn-confirm-partial').style.display='block';
+}
+
+function confirmPartial(){
+  if(!partialHoursSelected){ toast('⚠️ Selecciona las horas trabajadas'); return; }
+  if(!selKey)return;
+  overrides[selKey]=partialHoursSelected;
+  save(); closeModal();
+  toast(`⏱️ ${partialHoursSelected}h registradas · ${fmt(partialHoursSelected*RATE)}`);
+  renderCal(); renderResumen();
+}
+
+function closeModal(){
+  document.getElementById('modal').classList.remove('open');
+  const confirmBtn=document.getElementById('btn-confirm-partial');
+  if(confirmBtn) confirmBtn.style.display='none';
+  document.getElementById('partial-selector').style.display='none';
+  document.getElementById('btn-absent').style.display='block';
+  document.getElementById('btn-partial').style.display='block';
+}
+
+function closeBg(e){ if(e.target===document.getElementById('modal')) closeModal(); }
+
+function markAbsent(){
+  if(!selKey)return;
+  overrides[selKey]=true; save(); closeModal();
+  toast('📋 Día registrado como no laborado');
+  renderCal(); renderResumen();
+}
+
+function restoreDay(){
+  if(!selKey)return;
+  delete overrides[selKey]; save(); closeModal();
+  toast('✅ Turno restaurado');
+  renderCal(); renderResumen();
+}
+
+function removeOverride(k){
+  delete overrides[k]; save();
+  toast('✅ Turno restaurado');
+  renderCal(); renderResumen();
+}
+
+// ═══════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════
+function prevMonth(){ if(M===0){M=11;Y--;}else M--; reRender(); }
+function nextMonth(){ if(M===11){M=0;Y++;}else M++; reRender(); }
+function goToday(){ Y=today.getFullYear(); M=today.getMonth(); reRender(); }
+
+function reRender(){
+  const active = document.querySelector('.section.active').id;
+  if(active==='section-resumen') renderResumen();
+  if(active==='section-calendar') renderCal();
+  if(active==='section-expenses') renderExpenses();
+}
+
+// ═══════════════════════════════════════════════════════
+// PDF EXPORT
+// ═══════════════════════════════════════════════════════
+function exportPDF(){
+  const c = calcMonth(Y,M);
+  const mn = `${MONTHS[M]} ${Y}`;
+  const { items: expItems, total: expTotal } = getMonthExpenses(Y,M);
+  const total=dim(Y,M);
+
+  // Build shifts table data
+  let shiftsRows='';
+  for(let d=1;d<=total;d++){
+    const o=origShift(Y,M,d), eff=effShift(Y,M,d), h=effHours(Y,M,d);
+    if(o==='DESCANSO') continue; // skip rest days
+    const earn=h*RATE;
+    const effLabel=eff==='AUSENTE'?'🚫 No laborado':eff==='PARCIAL'?`⏱️ Parcial (${h}h)`:SHIFTS[o].icon+' '+SHIFTS[o].label;
+    shiftsRows+=`<tr>
+      <td>${d} ${WDAYS[new Date(Y,M,d).getDay()]}</td>
+      <td>${SHIFTS[o].icon} ${SHIFTS[o].label}</td>
+      <td>${effLabel}</td>
+      <td>${h}h</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace">${h>0?fmt(earn):'-'}</td>
+    </tr>`;
+  }
+
+  let expRows='';
+  expItems.forEach(e=>{
+    expRows+=`<tr>
+      <td>${e.name}</td>
+      <td>${e.type==='monthly'?'Mensual':`Día ${e.day}`}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace">${fmt(e.appliedAmount)}</td>
+    </tr>`;
+  });
+  if(expItems.length===0) expRows='<tr><td colspan="3" style="text-align:center;color:#9ca3af">Sin gastos registrados</td></tr>';
+
+  // Count shifts
+  let cntDia=0, cntNoche=0, cntAusente=0, cntParcial=0;
+  for(let d=1;d<=total;d++){
+    const eff=effShift(Y,M,d), o=origShift(Y,M,d);
+    if(eff==='AUSENTE') cntAusente++;
+    else if(eff==='PARCIAL') cntParcial++;
+    else if(o==='DÍA') cntDia++;
+    else if(o==='NOCHE') cntNoche++;
+  }
+
+  document.getElementById('print-report').innerHTML=`
+    <div class="print-header">
+      <div class="print-title">Reporte de Turnos</div>
+      <div class="print-sub">${mn} · Generado el ${new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'})}</div>
+    </div>
+
+    <div class="print-section-title">Resumen del Mes</div>
+    <div class="print-grid">
+      <div class="print-card">
+        <div class="print-card-label">Total Devengado</div>
+        <div class="print-card-val">${fmt(c.totalEarn)}</div>
+        <div class="print-card-sub">${c.totalHours} horas trabajadas</div>
+      </div>
+      <div class="print-card">
+        <div class="print-card-label">Total Gastos</div>
+        <div class="print-card-val">${fmt(expTotal)}</div>
+        <div class="print-card-sub">${expItems.length} concepto${expItems.length!==1?'s':''}</div>
+      </div>
+      <div class="print-card" style="border-color:${c.balance>=0?'#86efac':'#fca5a5'}">
+        <div class="print-card-label">Saldo Neto</div>
+        <div class="print-card-val" style="color:${c.balance>=0?'#15803d':'#dc2626'}">${fmt(c.balance)}</div>
+        <div class="print-card-sub">Devengado − Gastos</div>
+      </div>
+    </div>
+
+    <div class="print-grid">
+      <div class="print-card">
+        <div class="print-card-label">1ª Quincena (1–15)</div>
+        <div class="print-card-val">${fmt(c.q1earn)}</div>
+        <div class="print-card-sub">${c.q1h}h · ${Math.round(c.q1h/HOURS)} turnos</div>
+      </div>
+      <div class="print-card">
+        <div class="print-card-label">2ª Quincena (16–${total})</div>
+        <div class="print-card-val">${fmt(c.q2earn)}</div>
+        <div class="print-card-sub">${c.q2h}h · ${Math.round(c.q2h/HOURS)} turnos</div>
+      </div>
+      <div class="print-card">
+        <div class="print-card-label">Conteo de Turnos</div>
+        <div class="print-card-val" style="font-size:13px">
+          ☀️ Día: ${cntDia} &nbsp; 🌙 Noche: ${cntNoche}<br>
+          ${cntAusente>0?`🚫 Ausente: ${cntAusente} &nbsp;`:''}
+          ${cntParcial>0?`⏱️ Parcial: ${cntParcial}`:''}
+        </div>
+      </div>
+    </div>
+
+    <div class="print-balance">
+      <div class="print-balance-label">💵 Dinero Real Disponible</div>
+      <div class="print-balance-val">${fmt(c.balance)}</div>
+    </div>
+
+    <div class="print-section-title">Detalle de Turnos Laborados</div>
+    <table class="print-table">
+      <thead>
+        <tr>
+          <th>Día</th><th>Turno Original</th><th>Estado</th><th>Horas</th><th style="text-align:right">Devengado</th>
+        </tr>
+      </thead>
+      <tbody>${shiftsRows}</tbody>
+      <tfoot>
+        <tr style="font-weight:700;background:#f3f4f6">
+          <td colspan="3">TOTAL</td>
+          <td>${c.totalHours}h</td>
+          <td style="text-align:right">${fmt(c.totalEarn)}</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="print-section-title">Gastos del Mes</div>
+    <table class="print-table">
+      <thead>
+        <tr><th>Descripción</th><th>Tipo</th><th style="text-align:right">Valor</th></tr>
+      </thead>
+      <tbody>${expRows}</tbody>
+      <tfoot>
+        <tr style="font-weight:700;background:#f3f4f6">
+          <td colspan="2">TOTAL GASTOS</td>
+          <td style="text-align:right">${fmt(expTotal)}</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="print-footer">
+      Mis Turnos 2×2 · ${fmt(RATE)}/hora · ${HOURS}h/turno · ${fmt(PSHIFT)}/turno<br>
+      Reporte generado automáticamente
+    </div>
+  `;
+
+  setTimeout(()=>window.print(), 150);
+}
+
+// ═══════════════════════════════════════════════════════
+// PWA
+// ═══════════════════════════════════════════════════════
+const manifest={name:"Calendario de Turnos 2×2",short_name:"Mis Turnos",start_url:"./",display:"standalone",background_color:"#060b18",theme_color:"#4f46e5",icons:[{src:"https://api.iconify.design/twemoji:calendar.svg",sizes:"any",type:"image/svg+xml"}]};
+const mBlob=new Blob([JSON.stringify(manifest)],{type:'application/json'});
+const mLink=document.createElement('link'); mLink.rel='manifest'; mLink.href=URL.createObjectURL(mBlob);
+document.head.appendChild(mLink);
+
+if('serviceWorker' in navigator){
+  const sw=`const C='tv2';self.addEventListener('install',e=>{self.skipWaiting();});self.addEventListener('activate',e=>{e.waitUntil(clients.claim());});self.addEventListener('fetch',e=>{e.respondWith(fetch(e.request).catch(()=>new Response('Offline')));});`;
+  const swBlob=new Blob([sw],{type:'application/javascript'});
+  navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(()=>{});
+}
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+renderResumen();
+</script>
+</body>
+</html>
