@@ -290,6 +290,20 @@
       font-size: 10px; color: #374151; text-align: center; line-height: 2;
     }
 
+    /* ── SCOPE TOGGLE ── */
+    .scope-btn {
+      flex:1; padding: 8px 6px; border-radius: 10px; font-size: 11px; font-weight: 600;
+      cursor: pointer; font-family: 'Outfit', sans-serif; transition: all 0.15s;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted);
+    }
+    .scope-btn.scope-active { background: rgba(99,102,241,0.2); border-color: rgba(99,102,241,0.5); color: #a5b4fc; }
+
+    /* ── INCAPACITY ── */
+    .btn-incap { background: linear-gradient(135deg,#164e63,#0891b2); color: white; }
+    .modal-incap-notice { background: rgba(8,145,178,0.1); border: 1px solid rgba(8,145,178,0.3); border-radius: 10px; padding: 9px 12px; margin-bottom: 14px; font-size: 12px; color: #7dd3fc; text-align: center; }
+    .s-card.cyan::before { background: linear-gradient(90deg, #0891b2, transparent); }
+    .cell-incap { position: absolute; top: 2px; right: 2px; font-size: 8px; }
+
     /* ── PDF EXPORT BTN ── */
     .pdf-btn {
       display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -418,6 +432,16 @@
 <div class="section" id="section-expenses">
   <div class="expense-form">
     <div class="form-title">➕ Agregar Gasto</div>
+    <!-- Scope toggle -->
+    <div class="form-row" style="margin-bottom:10px">
+      <div class="form-group" style="flex:1">
+        <label class="form-label">¿Aplica en…?</label>
+        <div style="display:flex;gap:6px;margin-top:2px">
+          <button id="scope-btn-month" class="scope-btn scope-active" onclick="setScopeMonth()">📅 Solo este mes</button>
+          <button id="scope-btn-all"   class="scope-btn" onclick="setScopeAll()">🔁 Todos los meses</button>
+        </div>
+      </div>
+    </div>
     <div class="form-row">
       <div class="form-group" style="flex:2">
         <label class="form-label">Descripción</label>
@@ -457,6 +481,7 @@
     <div class="modal-shift-box" id="m-shift"></div>
     <div class="modal-notice" id="m-notice" style="display:none">🚫 Este día fue marcado como <b>no laborado</b></div>
     <div class="modal-partial-notice" id="m-partial" style="display:none">⏱️ Turno parcial registrado</div>
+    <div class="modal-incap-notice" id="m-incap" style="display:none">🏥 Incapacidad registrada</div>
 
     <!-- Partial hours selector -->
     <div id="partial-selector" style="display:none">
@@ -464,7 +489,18 @@
       <div class="hours-grid" id="hours-grid"></div>
     </div>
 
+    <!-- Incapacity value selector -->
+    <div id="incap-selector" style="display:none">
+      <div class="modal-section-label">Valor de este día de incapacidad ($)</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+        <input id="incap-value-input" class="form-input" type="number" inputmode="numeric" placeholder="ej. 26670" style="flex:1;font-size:15px" />
+        <button onclick="confirmIncapacity()" class="modal-btn btn-incap" style="width:auto;padding:10px 16px;margin:0">✅ Confirmar</button>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin-bottom:10px">💡 El valor varía según los días acumulados de incapacidad</div>
+    </div>
+
     <button class="modal-btn btn-partial" id="btn-partial" onclick="showPartialSelector()">⏱️ Turno parcial (menos de 12h)</button>
+    <button class="modal-btn btn-incap"   id="btn-incap"   onclick="showIncapSelector()">🏥 Incapacidad</button>
     <button class="modal-btn btn-absent"  id="btn-absent"  onclick="markAbsent()">😔 No fui a trabajar</button>
     <button class="modal-btn btn-restore" id="btn-restore" onclick="restoreDay()" style="display:none">✅ Restaurar turno original</button>
     <button class="modal-btn btn-close"   onclick="closeModal()">Cerrar</button>
@@ -492,6 +528,7 @@ const SHIFTS = {
   'DESCANSO':{bg:'#DCFCE7',color:'#166534',border:'#4ADE80',icon:'😴',label:'Descanso'},
   'AUSENTE': {bg:'#2d0a0a',color:'#f87171',border:'#7f1d1d',icon:'🚫',label:'Ausente'},
   'PARCIAL': {bg:'#1c1200',color:'#fbbf24',border:'#d97706',icon:'⏱️',label:'Parcial'},
+  'INCAP':   {bg:'#082f49',color:'#7dd3fc',border:'#0891b2',icon:'🏥',label:'Incapacidad'},
 };
 
 const today  = new Date(); today.setHours(0,0,0,0);
@@ -499,11 +536,24 @@ let Y = today.getFullYear(), M = today.getMonth(), selKey = null;
 
 // Storage keys
 const OV_KEY  = 'turnos_ov2';
-const EXP_KEY = 'turnos_exp';
+const EXP_KEY = 'turnos_exp';          // global/recurring expenses (legacy + new recurring)
+const EXP_MONTH_KEY = 'turnos_exp_m';  // per-month expenses  { "2026-05": [...], ... }
+const INCAP_RATE = 26670; // valor por día de incapacidad (configurable aquí)
 
 let overrides = JSON.parse(localStorage.getItem(OV_KEY)  || '{}');
 let expenses  = JSON.parse(localStorage.getItem(EXP_KEY) || '[]');
-// overrides[key] = true (absent) | number (partial hours)
+// monthExpenses: object keyed by "YYYY-MM" → array of expense objects
+let monthExpenses = JSON.parse(localStorage.getItem(EXP_MONTH_KEY) || '{}');
+// overrides[key] = true (absent) | number (partial hours) | 'INCAP' (incapacity)
+
+// Scope toggle state for new expense form
+let expenseScope = 'month'; // 'month' | 'all'
+function setScopeMonth(){ expenseScope='month'; document.getElementById('scope-btn-month').classList.add('scope-active'); document.getElementById('scope-btn-all').classList.remove('scope-active'); }
+function setScopeAll(){   expenseScope='all';   document.getElementById('scope-btn-all').classList.add('scope-active'); document.getElementById('scope-btn-month').classList.remove('scope-active'); }
+
+function monthKey(y,m){ return `${y}-${String(m+1).padStart(2,'0')}`; }
+function saveExp(){ localStorage.setItem(EXP_KEY, JSON.stringify(expenses)); }
+function saveMonthExp(){ localStorage.setItem(EXP_MONTH_KEY, JSON.stringify(monthExpenses)); }
 
 // ═══════════════════════════════════════════════════════
 // HELPERS
@@ -514,7 +564,6 @@ const fday    = (y,m)   => new Date(y,m,1).getDay();
 const fmt     = n       => '$' + Math.round(n).toLocaleString('es-CO');
 const fmtLabel= k       => { const [y,mo,d]=k.split('-'); return `${parseInt(d)} de ${MONTHS[parseInt(mo)-1]} ${y}`; };
 const save    = ()      => { localStorage.setItem(OV_KEY, JSON.stringify(overrides)); };
-const saveExp = ()      => { localStorage.setItem(EXP_KEY, JSON.stringify(expenses)); };
 
 document.getElementById('header-rate').textContent =
   `${fmt(RATE)}/hora · ${HOURS}h/turno · ${fmt(PSHIFT)}/turno`;
@@ -529,16 +578,26 @@ function effShift(y,m,d){
   if(o==='DESCANSO') return 'DESCANSO';
   const ov=overrides[key(y,m,d)];
   if(ov===true) return 'AUSENTE';
+  if(ov && typeof ov==='object' && ov.type==='INCAP') return 'INCAP';
+  if(ov==='INCAP') return 'INCAP'; // legacy
   if(typeof ov==='number') return 'PARCIAL';
   return o;
 }
 function effHours(y,m,d){
   const eff=effShift(y,m,d);
   if(eff==='AUSENTE'||eff==='DESCANSO') return 0;
+  if(eff==='INCAP') return 0;
   if(eff==='PARCIAL') return overrides[key(y,m,d)];
   return HOURS;
 }
+function getIncapValue(y,m,d){
+  const ov=overrides[key(y,m,d)];
+  if(ov && typeof ov==='object' && ov.type==='INCAP') return ov.value;
+  return INCAP_RATE; // fallback
+}
 function effEarnings(y,m,d){
+  const eff=effShift(y,m,d);
+  if(eff==='INCAP') return getIncapValue(y,m,d);
   return effHours(y,m,d) * RATE;
 }
 
@@ -552,20 +611,24 @@ function toast(msg){
 // EXPENSES HELPERS
 // ═══════════════════════════════════════════════════════
 function getMonthExpenses(y,m){
-  // monthly = always counted; daily = if day exists in month
   const totalDays = dim(y,m);
+  const mk = monthKey(y,m);
+  // Combine global/recurring expenses + this month's specific expenses
+  const allExp = [
+    ...expenses.map(e=>({...e, _src:'global'})),
+    ...((monthExpenses[mk])||[]).map(e=>({...e, _src:'month'}))
+  ];
   let total = 0;
   const items = [];
-  expenses.forEach(exp => {
+  allExp.forEach(exp => {
     if(exp.type==='monthly'){
       total += exp.amount;
-      items.push({...exp, appliedAmount: exp.amount, note: 'Mensual'});
+      items.push({...exp, appliedAmount: exp.amount, note: exp._src==='month'?`Solo ${MONTHS[m]} ${y}`:'Mensual'});
     } else {
-      // daily: if day <= totalDays, counts once per month
       const d = parseInt(exp.day);
       if(d >= 1 && d <= totalDays){
         total += exp.amount;
-        items.push({...exp, appliedAmount: exp.amount, note: `Día ${d} de cada mes`});
+        items.push({...exp, appliedAmount: exp.amount, note: exp._src==='month'?`Día ${d} — solo ${MONTHS[m]} ${y}`:`Día ${d} de cada mes`});
       }
     }
   });
@@ -595,21 +658,22 @@ function switchTab(tab){
 function calcMonth(y,m){
   const total=dim(y,m);
   let q1h=0,q2h=0,q1earn=0,q2earn=0;
-  let q1a=0,q2a=0,q1p=0,q2p=0;
-  let totalHours=0, totalEarn=0, absentCount=0, partialCount=0;
+  let q1a=0,q2a=0,q1p=0,q2p=0,q1i=0,q2i=0;
+  let totalHours=0, totalEarn=0, absentCount=0, partialCount=0, incapCount=0;
   for(let d=1;d<=total;d++){
     const eff=effShift(y,m,d);
     const h=effHours(y,m,d);
-    const e=h*RATE;
+    const e=effEarnings(y,m,d);
     totalHours+=h; totalEarn+=e;
     if(d<=15){ q1h+=h; q1earn+=e; }
     else { q2h+=h; q2earn+=e; }
     if(eff==='AUSENTE'){ absentCount++; d<=15?q1a++:q2a++; }
     if(eff==='PARCIAL'){ partialCount++; d<=15?q1p++:q2p++; }
+    if(eff==='INCAP'){   incapCount++;   d<=15?q1i++:q2i++; }
   }
   const expData = getMonthExpenses(y,m);
   const balance = totalEarn - expData.total;
-  return { q1h,q2h,q1earn,q2earn,totalHours,totalEarn,absentCount,partialCount,q1a,q2a,q1p,q2p, expenses:expData.total, balance };
+  return { q1h,q2h,q1earn,q2earn,totalHours,totalEarn,absentCount,partialCount,incapCount,q1a,q2a,q1p,q2p,q1i,q2i, expenses:expData.total, balance };
 }
 
 function renderResumen(){
@@ -618,8 +682,8 @@ function renderResumen(){
   const { items: expItems, total: expTotal } = getMonthExpenses(Y,M);
 
   // badges
-  let cnt={DÍA:0,NOCHE:0,DESCANSO:0,AUSENTE:0,PARCIAL:0};
-  for(let d=1;d<=dim(Y,M);d++){ cnt[effShift(Y,M,d)]++; }
+  let cnt={DÍA:0,NOCHE:0,DESCANSO:0,AUSENTE:0,PARCIAL:0,INCAP:0};
+  for(let d=1;d<=dim(Y,M);d++){ const s=effShift(Y,M,d); cnt[s]=(cnt[s]||0)+1; }
 
   const q1w = Math.round(c.q1h/HOURS), q2w = Math.round(c.q2h/HOURS);
 
@@ -639,6 +703,7 @@ function renderResumen(){
       <span class="badge" style="background:#DCFCE722;color:#166534;border:1px solid #4ADE8044">😴 Descanso: ${cnt.DESCANSO}</span>
       ${cnt.AUSENTE>0?`<span class="badge" style="background:#2d0a0a;color:#f87171;border:1px solid #7f1d1d">🚫 Ausente: ${cnt.AUSENTE}</span>`:''}
       ${cnt.PARCIAL>0?`<span class="badge" style="background:#1c120022;color:#fbbf24;border:1px solid #d9770644">⏱️ Parcial: ${cnt.PARCIAL}</span>`:''}
+      ${cnt.INCAP>0?`<span class="badge" style="background:#082f49;color:#7dd3fc;border:1px solid #0891b244">🏥 Incap: ${cnt.INCAP}</span>`:''}
     </div>
 
     <div class="summary-grid">
@@ -698,7 +763,7 @@ function renderCal(){
   for(let d=1;d<=total;d++){
     const o=origShift(Y,M,d), eff=effShift(Y,M,d), s=SHIFTS[eff];
     const isToday=new Date(Y,M,d).getTime()===today.getTime();
-    const isAbsent=eff==='AUSENTE', isPartial=eff==='PARCIAL', isQ1=d===15;
+    const isAbsent=eff==='AUSENTE', isPartial=eff==='PARCIAL', isIncap=eff==='INCAP', isQ1=d===15;
     const canClick=o!=='DESCANSO';
     const h=effHours(Y,M,d);
     const hasExp=hasDayExpense(Y,M,d);
@@ -706,13 +771,15 @@ function renderCal(){
       style="background:${s.bg};border:${isToday?'2px solid #f472b6':`1px solid ${s.border}`};box-shadow:${isToday?'0 0 12px rgba(244,114,182,0.5)':isQ1?'0 0 8px rgba(59,130,246,0.35)':'none'};${!canClick?'cursor:default':''}"
       onclick="${canClick?`openModal(${Y},${M},${d})`:''}">
       ${isAbsent?'<div class="cell-dot"></div>':''}
+      ${isIncap?'<div class="cell-incap">🏥</div>':''}
       ${isQ1?'<div class="cell-q1">Q1✓</div>':''}
       ${isPartial?'<div class="cell-partial"></div>':''}
       ${hasExp?'<div class="cell-expense">💸</div>':''}
       <div class="cell-day" style="font-weight:${isToday?'bold':'normal'};color:${isToday?'#f472b6':s.color}">${d}</div>
       <div class="cell-icon">${s.icon}</div>
       <div class="cell-label" style="color:${s.color}">${s.label.toUpperCase()}</div>
-      ${(eff!=='DESCANSO'&&eff!=='AUSENTE')?`<div class="cell-hours" style="color:${s.color}">${h}h</div>`:''}
+      ${(eff!=='DESCANSO'&&eff!=='AUSENTE'&&eff!=='INCAP')?`<div class="cell-hours" style="color:${s.color}">${h}h</div>`:''}
+      ${isIncap?`<div class="cell-hours" style="color:${s.color}">${fmt(getIncapValue(Y,M,d))}</div>`:''}
     </div>`;
   }
 
@@ -720,8 +787,9 @@ function renderCal(){
   let ovList='';
   const absentKeys = monthOv.filter(k=>overrides[k]===true);
   const partialKeys = monthOv.filter(k=>typeof overrides[k]==='number');
+  const incapKeys   = monthOv.filter(k=>overrides[k]==='INCAP');
 
-  if(absentKeys.length===0 && partialKeys.length===0){
+  if(absentKeys.length===0 && partialKeys.length===0 && incapKeys.length===0){
     ovList='<div class="empty-state">Sin modificaciones en este mes ✓</div>';
   } else {
     absentKeys.forEach(k=>{
@@ -730,6 +798,14 @@ function renderCal(){
         <div><div class="override-date absent">🚫 ${fmtLabel(k)}</div>
         <div class="override-orig">${SHIFTS[o].icon} ${SHIFTS[o].label} original · −${fmt(PSHIFT)}</div></div>
         <button class="override-remove absent" onclick="removeOverride('${k}')">Restaurar</button>
+      </div>`;
+    });
+    incapKeys.forEach(k=>{
+      const [,, dd]=k.split('-'), d=parseInt(dd), o=origShift(Y,M,d);
+      ovList+=`<div class="override-item" style="background:rgba(8,145,178,0.08);border:1px solid rgba(8,145,178,0.25)">
+        <div><div class="override-date" style="color:#7dd3fc;font-weight:600;font-size:12px;margin-bottom:2px">🏥 ${fmtLabel(k)}</div>
+        <div class="override-orig">${SHIFTS[o].icon} ${SHIFTS[o].label} original · ${fmt(getIncapValue(Y,M,d))}</div></div>
+        <button class="override-remove" style="background:rgba(8,145,178,0.12);border:1px solid rgba(8,145,178,0.25);color:#7dd3fc;border-radius:8px;padding:5px 10px;font-size:10px;cursor:pointer;font-family:'Outfit',sans-serif;font-weight:600" onclick="removeOverride('${k}')">Restaurar</button>
       </div>`;
     });
     partialKeys.forEach(k=>{
@@ -758,7 +834,7 @@ function renderCal(){
     <div>${ovList}</div>
     <div class="footer">
       Toca un turno para modificarlo<br>
-      ☀️ Día · 🌙 Noche · 😴 Descanso · ⏱️ Parcial · 🚫 Ausente<br>
+      ☀️ Día · 🌙 Noche · 😴 Descanso · ⏱️ Parcial · 🚫 Ausente · 🏥 Incapacidad<br>
       <span style="color:#f472b6">●</span> Hoy · <span style="color:#f87171">●</span> Ausente · <span style="color:#f59e0b">●</span> Parcial · 💸 Gasto
     </div>`;
 }
@@ -768,44 +844,45 @@ function renderCal(){
 // ═══════════════════════════════════════════════════════
 function renderExpenses(){
   const { items, total } = getMonthExpenses(Y,M);
-  const monthlyExps = expenses.filter(e=>e.type==='monthly');
-  const dailyExps   = expenses.filter(e=>e.type==='daily');
+  const mk = monthKey(Y,M);
+  const globalMonthly = expenses.filter(e=>e.type==='monthly');
+  const globalDaily   = expenses.filter(e=>e.type==='daily');
+  const localMonthly  = (monthExpenses[mk]||[]).filter(e=>e.type==='monthly');
+  const localDaily    = (monthExpenses[mk]||[]).filter(e=>e.type==='daily');
 
-  let html = '';
+  const totalItems = globalMonthly.length+globalDaily.length+localMonthly.length+localDaily.length;
 
-  if(expenses.length===0){
-    html='<div class="empty-state" style="color:#374151;padding:20px">No hay gastos registrados.<br><span style="font-size:20px">💸</span></div>';
+  let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <button class="nav-btn" onclick="prevMonth()" style="background:rgba(99,102,241,0.1)">‹</button>
+    <div style="text-align:center">
+      <div style="font-family:'DM Serif Display',serif;font-size:17px;color:#c7d2fe">${MONTHS[M]} ${Y}</div>
+    </div>
+    <button class="nav-btn" onclick="nextMonth()" style="background:rgba(99,102,241,0.1)">›</button>
+  </div>`;
+
+  if(totalItems===0){
+    html+='<div class="empty-state" style="color:#374151;padding:20px">No hay gastos registrados.<br><span style="font-size:20px">💸</span></div>';
   } else {
-    if(monthlyExps.length>0){
-      html+=`<div class="section-title">📅 Gastos Mensuales</div>`;
-      monthlyExps.forEach((e,i)=>{
-        html+=`<div class="exp-item monthly">
-          <div>
-            <div class="exp-name">${e.name}</div>
-            <div class="exp-meta">Se aplica todos los meses</div>
-          </div>
-          <div class="exp-right">
-            <div class="exp-amount">${fmt(e.amount)}</div>
-            <button class="exp-del" onclick="deleteExpense(${expenses.indexOf(e)})">✕</button>
-          </div>
-        </div>`;
-      });
+    const expItem = (e, src) => `<div class="exp-item ${e.type}">
+      <div>
+        <div class="exp-name">${e.name}</div>
+        <div class="exp-meta">${src==='global'?(e.type==='monthly'?'Todos los meses':`Día ${e.day} · todos los meses`):(e.type==='monthly'?`Solo ${MONTHS[M]} ${Y}`:`Día ${e.day} · solo ${MONTHS[M]} ${Y}`)}</div>
+      </div>
+      <div class="exp-right">
+        <div class="exp-amount">${fmt(e.amount)}</div>
+        <button class="exp-del" onclick="deleteExpense('${src}',${e.id})">✕</button>
+      </div>
+    </div>`;
+
+    if(globalMonthly.length>0||globalDaily.length>0){
+      html+=`<div class="section-title">🔁 Gastos Recurrentes (todos los meses)</div>`;
+      globalMonthly.forEach(e=>html+=expItem(e,'global'));
+      globalDaily.forEach(e=>{ const applies=parseInt(e.day)<=dim(Y,M); html+=expItem(e,'global')+(applies?'':''); });
     }
-    if(dailyExps.length>0){
-      html+=`<div class="section-title">📆 Gastos por Día Fijo</div>`;
-      dailyExps.forEach((e,i)=>{
-        const applies = parseInt(e.day)<=dim(Y,M);
-        html+=`<div class="exp-item daily">
-          <div>
-            <div class="exp-name">${e.name}</div>
-            <div class="exp-meta">Día ${e.day} de cada mes${!applies?' · <span style="color:var(--red)">No aplica este mes</span>':''}</div>
-          </div>
-          <div class="exp-right">
-            <div class="exp-amount">${fmt(e.amount)}</div>
-            <button class="exp-del" onclick="deleteExpense(${expenses.indexOf(e)})">✕</button>
-          </div>
-        </div>`;
-      });
+    if(localMonthly.length>0||localDaily.length>0){
+      html+=`<div class="section-title">📅 Solo ${MONTHS[M]} ${Y}</div>`;
+      localMonthly.forEach(e=>html+=expItem(e,'month'));
+      localDaily.forEach(e=>html+=expItem(e,'month'));
     }
     html+=`<div class="section-title">💰 Total en ${MONTHS[M]} ${Y}</div>
       <div class="s-card-full" style="margin-bottom:0">
@@ -833,8 +910,16 @@ function addExpense(){
   if(!name){ toast('⚠️ Escribe una descripción'); return; }
   if(!amount || amount<=0){ toast('⚠️ Ingresa un valor válido'); return; }
   if(type==='daily' && (!day || day<1 || day>31)){ toast('⚠️ Indica el día (1-31)'); return; }
-  expenses.push({ id: Date.now(), name, type, amount, day: type==='daily'?day:null });
-  saveExp();
+  const newExp = { id: Date.now(), name, type, amount, day: type==='daily'?day:null };
+  if(expenseScope==='all'){
+    expenses.push(newExp);
+    saveExp();
+  } else {
+    const mk = monthKey(Y,M);
+    if(!monthExpenses[mk]) monthExpenses[mk]=[];
+    monthExpenses[mk].push(newExp);
+    saveMonthExp();
+  }
   document.getElementById('exp-name').value='';
   document.getElementById('exp-amount').value='';
   document.getElementById('exp-day').value='';
@@ -842,9 +927,15 @@ function addExpense(){
   toast('✅ Gasto agregado');
 }
 
-function deleteExpense(idx){
-  expenses.splice(idx,1);
-  saveExp();
+function deleteExpense(src, id){
+  if(src==='global'){
+    expenses = expenses.filter(e=>e.id!==id);
+    saveExp();
+  } else {
+    const mk = monthKey(Y,M);
+    if(monthExpenses[mk]) monthExpenses[mk] = monthExpenses[mk].filter(e=>e.id!==id);
+    saveMonthExp();
+  }
   renderExpenses();
   toast('🗑️ Gasto eliminado');
 }
@@ -860,8 +951,9 @@ function openModal(y,m,d){
   selKey=key(y,m,d);
   const ov=overrides[selKey];
   const absent=ov===true;
+  const incap=ov==='INCAP';
   const partial=typeof ov==='number';
-  const eff=absent?'AUSENTE':partial?'PARCIAL':o;
+  const eff=absent?'AUSENTE':incap?'INCAP':partial?'PARCIAL':o;
   const s=SHIFTS[eff];
   partialHoursSelected=null;
 
@@ -872,16 +964,21 @@ function openModal(y,m,d){
     <div class="modal-shift-name" style="color:${s.color}">${s.label}</div>
     <div class="modal-shift-detail" style="color:${s.color}">${
       absent?'Turno original: '+SHIFTS[o].icon+' '+SHIFTS[o].label
+      :incap?`Valor incapacidad: ${fmt(getIncapValue(y,m,d))}`
       :partial?`${ov}h trabajadas · ${fmt(ov*RATE)}`
       :HOURS+'h · '+fmt(PSHIFT)
     }</div>`;
 
+  const modified = absent||incap||partial;
   document.getElementById('m-notice').style.display   = absent?'block':'none';
+  document.getElementById('m-incap').style.display    = incap?'block':'none';
+  if(incap) document.getElementById('m-incap').textContent = `🏥 Incapacidad · ${fmt(getIncapValue(y,m,d))}`;
   document.getElementById('m-partial').style.display  = partial?'block':'none';
   document.getElementById('m-partial').textContent    = partial?`⏱️ Turno parcial: ${ov}h trabajadas · ${fmt(ov*RATE)}`:'';
-  document.getElementById('btn-absent').style.display = (absent||partial)?'none':'block';
-  document.getElementById('btn-partial').style.display= (absent||partial)?'none':'block';
-  document.getElementById('btn-restore').style.display= (absent||partial)?'block':'none';
+  document.getElementById('btn-absent').style.display  = modified?'none':'block';
+  document.getElementById('btn-incap').style.display   = modified?'none':'block';
+  document.getElementById('btn-partial').style.display = modified?'none':'block';
+  document.getElementById('btn-restore').style.display = modified?'block':'none';
   document.getElementById('partial-selector').style.display='none';
 
   document.getElementById('modal').classList.add('open');
@@ -933,7 +1030,9 @@ function closeModal(){
   const confirmBtn=document.getElementById('btn-confirm-partial');
   if(confirmBtn) confirmBtn.style.display='none';
   document.getElementById('partial-selector').style.display='none';
+  document.getElementById('incap-selector').style.display='none';
   document.getElementById('btn-absent').style.display='block';
+  document.getElementById('btn-incap').style.display='block';
   document.getElementById('btn-partial').style.display='block';
 }
 
@@ -943,6 +1042,25 @@ function markAbsent(){
   if(!selKey)return;
   overrides[selKey]=true; save(); closeModal();
   toast('📋 Día registrado como no laborado');
+  renderCal(); renderResumen();
+}
+
+function showIncapSelector(){
+  document.getElementById('incap-selector').style.display='block';
+  document.getElementById('btn-incap').style.display='none';
+  document.getElementById('btn-partial').style.display='none';
+  document.getElementById('btn-absent').style.display='none';
+  document.getElementById('incap-value-input').value='';
+  document.getElementById('incap-value-input').focus();
+}
+
+function confirmIncapacity(){
+  const val = parseInt(document.getElementById('incap-value-input').value);
+  if(!val || val<=0){ toast('⚠️ Ingresa el valor del día de incapacidad'); return; }
+  if(!selKey) return;
+  overrides[selKey] = { type:'INCAP', value: val };
+  save(); closeModal();
+  toast(`🏥 Incapacidad registrada · ${fmt(val)}`);
   renderCal(); renderResumen();
 }
 
@@ -987,14 +1105,14 @@ function exportPDF(){
   for(let d=1;d<=total;d++){
     const o=origShift(Y,M,d), eff=effShift(Y,M,d), h=effHours(Y,M,d);
     if(o==='DESCANSO') continue; // skip rest days
-    const earn=h*RATE;
-    const effLabel=eff==='AUSENTE'?'🚫 No laborado':eff==='PARCIAL'?`⏱️ Parcial (${h}h)`:SHIFTS[o].icon+' '+SHIFTS[o].label;
+    const effLabel=eff==='AUSENTE'?'🚫 No laborado':eff==='INCAP'?`🏥 Incapacidad · ${fmt(getIncapValue(Y,M,d))}`:eff==='PARCIAL'?`⏱️ Parcial (${h}h)`:SHIFTS[o].icon+' '+SHIFTS[o].label;
+    const earn=eff==='INCAP'?INCAP_RATE:h*RATE;
     shiftsRows+=`<tr>
       <td>${d} ${WDAYS[new Date(Y,M,d).getDay()]}</td>
       <td>${SHIFTS[o].icon} ${SHIFTS[o].label}</td>
       <td>${effLabel}</td>
-      <td>${h}h</td>
-      <td style="text-align:right;font-family:'DM Mono',monospace">${h>0?fmt(earn):'-'}</td>
+      <td>${eff==='INCAP'?'—':h+'h'}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace">${(h>0||eff==='INCAP')?fmt(earn):'-'}</td>
     </tr>`;
   }
 
@@ -1009,10 +1127,11 @@ function exportPDF(){
   if(expItems.length===0) expRows='<tr><td colspan="3" style="text-align:center;color:#9ca3af">Sin gastos registrados</td></tr>';
 
   // Count shifts
-  let cntDia=0, cntNoche=0, cntAusente=0, cntParcial=0;
+  let cntDia=0, cntNoche=0, cntAusente=0, cntParcial=0, cntIncap=0;
   for(let d=1;d<=total;d++){
     const eff=effShift(Y,M,d), o=origShift(Y,M,d);
     if(eff==='AUSENTE') cntAusente++;
+    else if(eff==='INCAP') cntIncap++;
     else if(eff==='PARCIAL') cntParcial++;
     else if(o==='DÍA') cntDia++;
     else if(o==='NOCHE') cntNoche++;
@@ -1059,7 +1178,8 @@ function exportPDF(){
         <div class="print-card-val" style="font-size:13px">
           ☀️ Día: ${cntDia} &nbsp; 🌙 Noche: ${cntNoche}<br>
           ${cntAusente>0?`🚫 Ausente: ${cntAusente} &nbsp;`:''}
-          ${cntParcial>0?`⏱️ Parcial: ${cntParcial}`:''}
+          ${cntParcial>0?`⏱️ Parcial: ${cntParcial} &nbsp;`:''}
+          ${cntIncap>0?`🏥 Incapacidad: ${cntIncap}`:''}
         </div>
       </div>
     </div>
@@ -1117,10 +1237,82 @@ const mBlob=new Blob([JSON.stringify(manifest)],{type:'application/json'});
 const mLink=document.createElement('link'); mLink.rel='manifest'; mLink.href=URL.createObjectURL(mBlob);
 document.head.appendChild(mLink);
 
+// ── VERSION: cambia este número cada vez que subas cambios a GitHub ──
+const APP_VERSION = '1.1';
+
 if('serviceWorker' in navigator){
-  const sw=`const C='tv2';self.addEventListener('install',e=>{self.skipWaiting();});self.addEventListener('activate',e=>{e.waitUntil(clients.claim());});self.addEventListener('fetch',e=>{e.respondWith(fetch(e.request).catch(()=>new Response('Offline')));});`;
-  const swBlob=new Blob([sw],{type:'application/javascript'});
-  navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(()=>{});
+  // Service worker que siempre va a la red, nunca cachea — así GitHub Pages
+  // sirve la versión más reciente cada vez que hay conexión.
+  const sw = `
+    const VER = '${APP_VERSION}';
+    self.addEventListener('install', e => { self.skipWaiting(); });
+    self.addEventListener('activate', e => { e.waitUntil(clients.claim()); });
+    self.addEventListener('fetch', e => {
+      // Siempre intenta la red; si falla, responde "Offline"
+      e.respondWith(
+        fetch(e.request, { cache: 'no-store' }).catch(() => new Response(
+          '<h2 style="font-family:sans-serif;text-align:center;padding:40px">Sin conexión 📵<br><small>Abre la app cuando tengas internet para ver la versión más reciente.</small></h2>',
+          { headers: { 'Content-Type': 'text/html' } }
+        ))
+      );
+    });
+    // Escucha mensajes del cliente (para forzar actualización)
+    self.addEventListener('message', e => {
+      if(e.data === 'SKIP_WAITING') self.skipWaiting();
+    });
+  `;
+  const swBlob = new Blob([sw], {type:'application/javascript'});
+  const swURL  = URL.createObjectURL(swBlob);
+
+  navigator.serviceWorker.register(swURL).then(reg => {
+    // Revisa si hay una nueva versión cada vez que se abre la app
+    reg.update();
+    reg.addEventListener('updatefound', () => {
+      const newWorker = reg.installing;
+      newWorker.addEventListener('statechange', () => {
+        if(newWorker.state === 'installed' && navigator.serviceWorker.controller){
+          showUpdateBanner();
+        }
+      });
+    });
+  }).catch(()=>{});
+
+  // También revisa la versión guardada vs la actual
+  const savedVer = localStorage.getItem('app_version');
+  if(savedVer && savedVer !== APP_VERSION){
+    showUpdateBanner();
+  }
+  localStorage.setItem('app_version', APP_VERSION);
+}
+
+function showUpdateBanner(){
+  // Evita mostrar el banner duplicado
+  if(document.getElementById('update-banner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'update-banner';
+  banner.style.cssText = `
+    position:fixed;top:0;left:0;right:0;z-index:9999;
+    background:linear-gradient(90deg,#14532d,#166534);
+    border-bottom:1px solid #4ade80;
+    padding:10px 14px;display:flex;align-items:center;justify-content:space-between;
+    font-family:'Outfit',sans-serif;font-size:13px;color:#dcfce7;
+  `;
+  banner.innerHTML = `
+    <span>🎉 <b>Nueva versión disponible</b></span>
+    <button onclick="applyUpdate()" style="
+      background:#16a34a;border:1px solid #4ade80;color:#dcfce7;
+      border-radius:8px;padding:5px 14px;font-size:12px;font-weight:700;
+      cursor:pointer;font-family:'Outfit',sans-serif;
+    ">Actualizar</button>
+  `;
+  document.body.prepend(banner);
+}
+
+function applyUpdate(){
+  navigator.serviceWorker.getRegistration().then(reg => {
+    if(reg && reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+  });
+  window.location.reload();
 }
 
 // ═══════════════════════════════════════════════════════
