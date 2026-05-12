@@ -324,10 +324,25 @@
     }
     .disc-item.quincenal { border-left: 3px solid #a855f7; }
     .disc-item.mensual   { border-left: 3px solid #6366f1; }
+    .disc-item.disabled  { opacity: 0.45; border-left-color: #374151 !important; }
     .disc-pct-badge {
       font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500;
       color: #c084fc; margin-right: 8px;
     }
+    .disc-toggle {
+      background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.3);
+      color: #a5b4fc; border-radius: 8px; padding: 4px 8px; font-size: 11px;
+      cursor: pointer; margin-right: 4px; font-family: 'Outfit', sans-serif; font-weight: 600;
+    }
+    .disc-toggle.off {
+      background: rgba(100,116,139,0.12); border-color: rgba(100,116,139,0.3); color: #64748b;
+    }
+    .disc-scope-badge {
+      font-size: 9px; font-weight: 700; letter-spacing: 1px; padding: 2px 6px;
+      border-radius: 6px; text-transform: uppercase; margin-top: 3px; display: inline-block;
+    }
+    .disc-scope-badge.global { background: rgba(99,102,241,0.15); color: #818cf8; }
+    .disc-scope-badge.month  { background: rgba(236,72,153,0.15); color: #f472b6; }
 
     /* ── INCAPACITY ── */
     .btn-incap { background: linear-gradient(135deg,#164e63,#0891b2); color: white; }
@@ -512,6 +527,16 @@
 <div class="section" id="section-descuentos">
   <div class="expense-form">
     <div class="form-title">✂️ Agregar Descuento</div>
+    <!-- Scope toggle -->
+    <div class="form-row" style="margin-bottom:10px">
+      <div class="form-group" style="flex:1">
+        <label class="form-label">¿Aplica en…?</label>
+        <div style="display:flex;gap:6px;margin-top:2px">
+          <button id="disc-scope-btn-all"   class="scope-btn scope-active" onclick="setDiscScopeAll()">🔁 Todos los meses</button>
+          <button id="disc-scope-btn-month" class="scope-btn" onclick="setDiscScopeMonth()">📅 Solo este mes</button>
+        </div>
+      </div>
+    </div>
     <div class="form-row">
       <div class="form-group" style="flex:2">
         <label class="form-label">Nombre</label>
@@ -630,14 +655,18 @@ let Y = today.getFullYear(), M = today.getMonth(), selKey = null;
 const OV_KEY  = 'turnos_ov2';
 const EXP_KEY = 'turnos_exp';
 const EXP_MONTH_KEY = 'turnos_exp_m';
-const DISC_KEY = 'turnos_disc';         // discounts array
+const DISC_KEY      = 'turnos_disc';   // global discounts array
+const DISC_MON_KEY  = 'turnos_disc_m'; // per-month overrides
 const INCAP_RATE = 26670;
 
 let overrides     = JSON.parse(localStorage.getItem(OV_KEY)  || '{}');
 let expenses      = JSON.parse(localStorage.getItem(EXP_KEY) || '[]');
 let monthExpenses = JSON.parse(localStorage.getItem(EXP_MONTH_KEY) || '{}');
-let discounts     = JSON.parse(localStorage.getItem(DISC_KEY) || '[]');
-// discount: { id, name, freq:'quincenal'|'mensual', type:'pct'|'fixed', pct, fixed }
+let discounts      = JSON.parse(localStorage.getItem(DISC_KEY)     || '[]');
+let discountMonths = JSON.parse(localStorage.getItem(DISC_MON_KEY) || '{}');
+// global discount: { id, name, freq, type, pct, fixed, scope:'global' }
+// discountMonths[mk].disabled = [id, ...] (global discounts OFF for this month)
+// discountMonths[mk].extras   = [{...}]   (extra discounts only for this month)
 
 // Scope toggle state for new expense form
 let expenseScope = 'month'; // 'month' | 'all'
@@ -648,34 +677,29 @@ function monthKey(y,m){ return `${y}-${String(m+1).padStart(2,'0')}`; }
 function saveExp(){ localStorage.setItem(EXP_KEY, JSON.stringify(expenses)); }
 function saveMonthExp(){ localStorage.setItem(EXP_MONTH_KEY, JSON.stringify(monthExpenses)); }
 function saveDisc(){ localStorage.setItem(DISC_KEY, JSON.stringify(discounts)); }
+function saveDiscMon(){ localStorage.setItem(DISC_MON_KEY, JSON.stringify(discountMonths)); }
 
-// Returns total discounts for a quincena given the quincena earnings
-function getDiscountTotal(qEarn, totalEarn, quincenal /* bool */){
-  let total = 0;
-  discounts.forEach(d => {
-    if(d.freq==='quincenal'){
-      // applies to each quincena separately
-      const base = quincenal ? qEarn : 0; // pass qEarn per quincena call
-      total += d.type==='pct' ? (d.pct/100)*qEarn : d.fixed;
-    } else {
-      // mensual: only add once — caller handles splitting
-    }
-  });
-  return total;
+function getMonthDiscData(y, m){
+  const mk = monthKey(y, m);
+  const md = discountMonths[mk] || { disabled:[], extras:[] };
+  // Active global discounts for this month
+  const activeGlobal = discounts.filter(d => !md.disabled.includes(d.id));
+  // Month-specific extras
+  const extras = md.extras || [];
+  return { activeGlobal, extras, disabled: md.disabled||[], allForMonth: [...activeGlobal, ...extras] };
 }
 
 // Returns full monthly discount totals broken down
 function getMonthDiscounts(y, m){
-  const c = calcMonthEarnings(y,m); // raw earnings without discounts
+  const c = calcMonthEarnings(y, m);
+  const { allForMonth } = getMonthDiscData(y, m);
   let q1disc=0, q2disc=0, monthDisc=0;
-  discounts.forEach(d => {
+  allForMonth.forEach(d => {
     if(d.freq==='quincenal'){
-      const v1 = d.type==='pct' ? (d.pct/100)*c.q1earn : d.fixed;
-      const v2 = d.type==='pct' ? (d.pct/100)*c.q2earn : d.fixed;
-      q1disc += v1; q2disc += v2;
+      q1disc += d.type==='pct' ? (d.pct/100)*c.q1earn : d.fixed;
+      q2disc += d.type==='pct' ? (d.pct/100)*c.q2earn : d.fixed;
     } else {
-      const v = d.type==='pct' ? (d.pct/100)*c.totalEarn : d.fixed;
-      monthDisc += v;
+      monthDisc += d.type==='pct' ? (d.pct/100)*c.totalEarn : d.fixed;
     }
   });
   return { q1disc, q2disc, total: q1disc+q2disc+monthDisc, monthDisc };
@@ -1086,6 +1110,18 @@ function deleteExpense(src, id){
 // ═══════════════════════════════════════════════════════
 // DESCUENTOS
 // ═══════════════════════════════════════════════════════
+let discScope = 'global'; // 'global' | 'month'
+function setDiscScopeAll(){
+  discScope='global';
+  document.getElementById('disc-scope-btn-all').classList.add('scope-active');
+  document.getElementById('disc-scope-btn-month').classList.remove('scope-active');
+}
+function setDiscScopeMonth(){
+  discScope='month';
+  document.getElementById('disc-scope-btn-month').classList.add('scope-active');
+  document.getElementById('disc-scope-btn-all').classList.remove('scope-active');
+}
+
 function toggleDiscType(){
   const t = document.getElementById('disc-type').value;
   document.getElementById('disc-pct-group').style.display   = t==='pct'?'flex':'none';
@@ -1101,8 +1137,19 @@ function addDiscount(){
   if(!name){ toast('⚠️ Escribe el nombre del descuento'); return; }
   if(type==='pct'  && (!pct   || pct<=0))  { toast('⚠️ Ingresa el porcentaje'); return; }
   if(type==='fixed'&& (!fixed || fixed<=0)){ toast('⚠️ Ingresa el valor'); return; }
-  discounts.push({ id: Date.now(), name, freq, type, pct: type==='pct'?pct:null, fixed: type==='fixed'?fixed:null });
-  saveDisc();
+
+  const entry = { id: Date.now(), name, freq, type, pct: type==='pct'?pct:null, fixed: type==='fixed'?fixed:null, scope: discScope };
+
+  if(discScope==='global'){
+    discounts.push(entry);
+    saveDisc();
+  } else {
+    const mk = monthKey(Y, M);
+    if(!discountMonths[mk]) discountMonths[mk] = { disabled:[], extras:[] };
+    discountMonths[mk].extras.push(entry);
+    saveDiscMon();
+  }
+
   document.getElementById('disc-name').value='';
   document.getElementById('disc-pct').value='';
   document.getElementById('disc-fixed').value='';
@@ -1111,53 +1158,93 @@ function addDiscount(){
   toast('✅ Descuento agregado');
 }
 
-function deleteDiscount(id){
-  discounts = discounts.filter(d=>d.id!==id);
-  saveDisc();
-  renderDiscounts();
-  renderResumen();
+function deleteDiscount(id, scope){
+  if(scope==='global'){
+    discounts = discounts.filter(d=>d.id!==id);
+    saveDisc();
+    // Also remove from any month disabled lists
+    Object.keys(discountMonths).forEach(mk=>{
+      if(discountMonths[mk].disabled) discountMonths[mk].disabled = discountMonths[mk].disabled.filter(x=>x!==id);
+    });
+    saveDiscMon();
+  } else {
+    const mk = monthKey(Y, M);
+    if(discountMonths[mk]?.extras) discountMonths[mk].extras = discountMonths[mk].extras.filter(d=>d.id!==id);
+    saveDiscMon();
+  }
+  renderDiscounts(); renderResumen();
   toast('🗑️ Descuento eliminado');
 }
 
+function toggleDiscountMonth(id){
+  const mk = monthKey(Y, M);
+  if(!discountMonths[mk]) discountMonths[mk] = { disabled:[], extras:[] };
+  const disabled = discountMonths[mk].disabled;
+  const idx = disabled.indexOf(id);
+  if(idx>=0) disabled.splice(idx,1);
+  else disabled.push(id);
+  saveDiscMon();
+  renderDiscounts(); renderResumen();
+}
+
 function renderDiscounts(){
-  const earn = calcMonthEarnings(Y,M);
-  const discData = getMonthDiscounts(Y,M);
-  const quincenales = discounts.filter(d=>d.freq==='quincenal');
-  const mensuales   = discounts.filter(d=>d.freq==='mensual');
+  const earn = calcMonthEarnings(Y, M);
+  const discData = getMonthDiscounts(Y, M);
+  const { activeGlobal, extras, disabled } = getMonthDiscData(Y, M);
+  const mk = monthKey(Y, M);
 
   let html = '';
 
-  if(discounts.length===0){
+  const discItem = (d, isGlobal) => {
+    const isDisabled = isGlobal && disabled.includes(d.id);
+    const valQ1 = d.type==='pct' ? (d.pct/100)*earn.q1earn : d.fixed;
+    const valQ2 = d.type==='pct' ? (d.pct/100)*earn.q2earn : d.fixed;
+    const valM  = d.type==='pct' ? (d.pct/100)*earn.totalEarn : d.fixed;
+    const label = d.type==='pct' ? `${d.pct}%` : fmt(d.fixed);
+    const preview = d.freq==='quincenal'
+      ? `1ª: ${fmt(valQ1)} · 2ª: ${fmt(valQ2)}`
+      : `Mensual: ${fmt(valM)}`;
+    const scopeBadge = isGlobal
+      ? `<span class="disc-scope-badge global">Todos los meses</span>`
+      : `<span class="disc-scope-badge month">Solo ${MONTHS[M]}</span>`;
+    const toggleBtn = isGlobal
+      ? `<button class="disc-toggle ${isDisabled?'off':''}" onclick="toggleDiscountMonth(${d.id})" title="${isDisabled?'Activar este mes':'Desactivar este mes'}">${isDisabled?'OFF':'ON'}</button>`
+      : '';
+    return `<div class="disc-item ${d.freq}${isDisabled?' disabled':''}">
+      <div style="flex:1">
+        <div class="exp-name">${d.name}</div>
+        <div class="exp-meta">${d.freq==='quincenal'?'Quincenal':'Mensual'} · ${label}</div>
+        ${scopeBadge}
+        ${!isDisabled?`<div class="exp-meta" style="color:#9ca3af;margin-top:2px">${preview}</div>`:'<div class="exp-meta" style="color:#64748b;margin-top:2px">Desactivado este mes</div>'}
+      </div>
+      <div class="exp-right">
+        <span class="disc-pct-badge">${label}</span>
+        ${toggleBtn}
+        <button class="exp-del" onclick="deleteDiscount(${d.id},'${isGlobal?'global':'month'}')">✕</button>
+      </div>
+    </div>`;
+  };
+
+  const allGlobal = discounts;
+  const allExtras = (discountMonths[mk]?.extras)||[];
+
+  if(allGlobal.length===0 && allExtras.length===0){
     html='<div class="empty-state" style="color:#374151;padding:20px">No hay descuentos registrados.<br><span style="font-size:20px">✂️</span></div>';
   } else {
-    const discItem = d => {
-      const valQ1 = d.type==='pct' ? (d.pct/100)*earn.q1earn : d.fixed;
-      const valQ2 = d.type==='pct' ? (d.pct/100)*earn.q2earn : d.fixed;
-      const valM  = d.type==='pct' ? (d.pct/100)*earn.totalEarn : d.fixed;
-      const label = d.type==='pct' ? `${d.pct}%` : fmt(d.fixed);
-      const preview = d.freq==='quincenal'
-        ? `1ª quincena: ${fmt(valQ1)} · 2ª quincena: ${fmt(valQ2)}`
-        : `Mensual: ${fmt(valM)}`;
-      return `<div class="disc-item ${d.freq}">
-        <div>
-          <div class="exp-name">${d.name}</div>
-          <div class="exp-meta">${d.freq==='quincenal'?'Quincenal':'Mensual'} · ${label}</div>
-          <div class="exp-meta" style="color:#9ca3af;margin-top:2px">${preview}</div>
-        </div>
-        <div class="exp-right">
-          <span class="disc-pct-badge">${label}</span>
-          <button class="exp-del" onclick="deleteDiscount(${d.id})">✕</button>
-        </div>
-      </div>`;
-    };
+    const globalQ = allGlobal.filter(d=>d.freq==='quincenal');
+    const globalM = allGlobal.filter(d=>d.freq==='mensual');
+    const extraQ  = allExtras.filter(d=>d.freq==='quincenal');
+    const extraM  = allExtras.filter(d=>d.freq==='mensual');
 
-    if(quincenales.length>0){
-      html+=`<div class="section-title">💜 Descuentos Quincenales</div>`;
-      quincenales.forEach(d=>html+=discItem(d));
+    if(globalQ.length>0||globalM.length>0){
+      html+=`<div class="section-title">🔁 Descuentos Globales</div>`;
+      globalQ.forEach(d=>html+=discItem(d,true));
+      globalM.forEach(d=>html+=discItem(d,true));
     }
-    if(mensuales.length>0){
-      html+=`<div class="section-title">🔵 Descuentos Mensuales</div>`;
-      mensuales.forEach(d=>html+=discItem(d));
+    if(allExtras.length>0){
+      html+=`<div class="section-title">📅 Solo ${MONTHS[M]} ${Y}</div>`;
+      extraQ.forEach(d=>html+=discItem(d,false));
+      extraM.forEach(d=>html+=discItem(d,false));
     }
 
     html+=`<div class="section-title">✂️ Total Descuentos — ${MONTHS[M]} ${Y}</div>
